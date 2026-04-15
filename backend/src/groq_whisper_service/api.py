@@ -59,7 +59,13 @@ def _list_audio_devices() -> dict[str, Any]:
 def create_app(
     service: RealtimeTranscriptionService | None = None,
 ) -> FastAPI:
-    active_service = service or RealtimeTranscriptionService()
+    from .persistence import SessionStore
+
+    session_store = SessionStore()
+    if service is None:
+        active_service = RealtimeTranscriptionService(session_store=session_store)
+    else:
+        active_service = service
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -147,6 +153,25 @@ def create_app(
         result = active_service.update_config(body)
         status_code = 200 if result["ok"] else 409
         return JSONResponse(result, status_code=status_code)
+
+    @app.get("/sessions")
+    def list_sessions(limit: int = 50, offset: int = 0) -> JSONResponse:
+        rows = session_store.list_sessions(limit=limit, offset=offset)
+        return JSONResponse({"sessions": rows})
+
+    @app.get("/sessions/{session_id}")
+    def get_session(session_id: str) -> JSONResponse:
+        row = session_store.get_session(session_id)
+        if row is None:
+            return JSONResponse({"error": "Session not found"}, status_code=404)
+        return JSONResponse(row)
+
+    @app.delete("/sessions/{session_id}")
+    def delete_session(session_id: str) -> JSONResponse:
+        deleted = session_store.delete_session(session_id)
+        if not deleted:
+            return JSONResponse({"error": "Session not found"}, status_code=404)
+        return JSONResponse({"ok": True})
 
     return app
 

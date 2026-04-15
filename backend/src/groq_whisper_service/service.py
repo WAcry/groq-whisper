@@ -143,6 +143,12 @@ def encode_audio_window_to_flac_bytes(
     return result.stdout
 
 
+class SessionStoreLike(Protocol):
+    def create_session(self, *, model: str, language: str | None, prompt: str | None) -> str: ...
+    def update_text(self, session_id: str, *, full_text: str, tick_count: int) -> None: ...
+    def finalize_session(self, session_id: str, **kwargs: Any) -> None: ...
+
+
 class RealtimeTranscriptionService:
     def __init__(
         self,
@@ -153,6 +159,7 @@ class RealtimeTranscriptionService:
         client_factory: Callable[[str], Any] = create_client,
         transcribe_func: Callable[..., dict[str, Any]] = transcribe_bytes,
         clock: Callable[[], float] = time.perf_counter,
+        session_store: SessionStoreLike | None = None,
     ) -> None:
         self.config = config or RealtimeTranscriptionServiceConfig()
         if self.config.window_seconds <= 0.0:
@@ -167,6 +174,7 @@ class RealtimeTranscriptionService:
         self.client_factory = client_factory
         self.transcribe_func = transcribe_func
         self.clock = clock
+        self.session_store = session_store
 
         self.state_lock = threading.Lock()
         self.subscribers_lock = threading.Lock()
@@ -182,6 +190,7 @@ class RealtimeTranscriptionService:
         self.running = False
         self.subscribers: set[queue.Queue[dict[str, Any]]] = set()
         self._preflight_results: dict[str, Any] | None = None
+        self._current_session_id: str | None = None
 
         self.aggregator = self._build_aggregator()
 
@@ -279,6 +288,13 @@ class RealtimeTranscriptionService:
             self._state = ServiceState.running
             self.running = True
 
+        if self.session_store is not None:
+            self._current_session_id = self.session_store.create_session(
+                model=self.config.model,
+                language=self.config.language,
+                prompt=self.config.prompt,
+            )
+
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
         self._publish(
@@ -374,6 +390,7 @@ class RealtimeTranscriptionService:
         if event_type in {"transcription.patch", "transcription.final"}:
             with self.state_lock:
                 self.latest_patch_payload = payload
+            self._persist_event(payload)
 
         with self.subscribers_lock:
             subscribers = list(self.subscribers)
@@ -392,6 +409,46 @@ class RealtimeTranscriptionService:
         with self.state_lock:
             self.last_error = message
         self._publish({"type": "service.error", "message": message})
+        self._persist_error(message)
+
+    def _persist_event(self, payload: dict[str, Any]) -> None:
+        if self.session_store is None or self._current_session_id is None:
+            return
+        event_type = payload.get("type")
+        try:
+            if event_type == "transcription.patch":
+                self.session_store.update_text(
+                    self._current_session_id,
+                    full_text=payload.get("display_text", ""),
+                    tick_count=payload.get("tick_index", 0),
+                )
+            elif event_type == "transcription.final":
+                duration_s = None
+                if self.started_at_monotonic is not None:
+                    duration_s = self.clock() - self.started_at_monotonic
+                self.session_store.finalize_session(
+                    self._current_session_id,
+                    full_text=payload.get("display_text", ""),
+                    tick_count=payload.get("tick_index", 0),
+                    duration_seconds=duration_s,
+                )
+        except Exception:
+            pass
+
+    def _persist_error(self, message: str) -> None:
+        if self.session_store is None or self._current_session_id is None:
+            return
+        try:
+            duration_s = None
+            if self.started_at_monotonic is not None:
+                duration_s = self.clock() - self.started_at_monotonic
+            self.session_store.finalize_session(
+                self._current_session_id,
+                error_log=message,
+                duration_seconds=duration_s,
+            )
+        except Exception:
+            pass
 
     def _build_patch_payload(
         self,
