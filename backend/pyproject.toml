@@ -1,0 +1,22 @@
+[project]
+name = "groq-whisper-service"
+version = "0.1.0"
+description = "Windows live audio capture + Groq Whisper rolling stable-prefix transcription service"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "groq>=0.24.0",
+    "numpy>=2.0.0",
+    "PyAudioWPatch; platform_system == 'Windows'",
+    "uvicorn>=0.30.0",
+]
+
+[build-system]
+requires = ["setuptools>=69.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

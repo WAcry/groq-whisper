@@ -1,0 +1,633 @@
+{
+  "text": " At this turning point of history there manifest themselves, side by side and often mixed and entangled together, a magnificent, manifold, virgin-forest-like upgrowth and upstriving, a kind of tropical tempo in the rivalry of growth, and an extraordinary decay and self-destruction, owing to the savagely opposing and seemingly exploding egoisms, which strive with one another for sun and light, and can no longer assign any limit, restraint, or forbearance for themselves by means of the hitherto existing morality.",
+  "task": "transcribe",
+  "language": "English",
+  "duration": 32.64,
+  "words": [
+    {
+      "word": "At",
+      "start": 0.28,
+      "end": 0.42
+    },
+    {
+      "word": "this",
+      "start": 0.42,
+      "end": 0.64
+    },
+    {
+      "word": "turning",
+      "start": 0.64,
+      "end": 0.98
+    },
+    {
+      "word": "point",
+      "start": 0.98,
+      "end": 1.28
+    },
+    {
+      "word": "of",
+      "start": 1.28,
+      "end": 1.46
+    },
+    {
+      "word": "history",
+      "start": 1.46,
+      "end": 1.84
+    },
+    {
+      "word": "there",
+      "start": 1.84,
+      "end": 2.08
+    },
+    {
+      "word": "manifest",
+      "start": 2.08,
+      "end": 2.58
+    },
+    {
+      "word": "themselves,",
+      "start": 2.58,
+      "end": 3.5
+    },
+    {
+      "word": "side",
+      "start": 3.5,
+      "end": 3.76
+    },
+    {
+      "word": "by",
+      "start": 3.76,
+      "end": 3.92
+    },
+    {
+      "word": "side",
+      "start": 3.92,
+      "end": 4.28
+    },
+    {
+      "word": "and",
+      "start": 4.28,
+      "end": 4.52
+    },
+    {
+      "word": "often",
+      "start": 4.52,
+      "end": 4.76
+    },
+    {
+      "word": "mixed",
+      "start": 4.76,
+      "end": 5.14
+    },
+    {
+      "word": "and",
+      "start": 5.14,
+      "end": 5.38
+    },
+    {
+      "word": "entangled",
+      "start": 5.38,
+      "end": 5.84
+    },
+    {
+      "word": "together,",
+      "start": 5.84,
+      "end": 6.76
+    },
+    {
+      "word": "a",
+      "start": 5.82,
+      "end": 6.88
+    },
+    {
+      "word": "magnificent,",
+      "start": 6.88,
+      "end": 7.96
+    },
+    {
+      "word": "manifold,",
+      "start": 7.96,
+      "end": 9.08
+    },
+    {
+      "word": "virgin-forest-like",
+      "start": 9.08,
+      "end": 10.16
+    },
+    {
+      "word": "upgrowth",
+      "start": 10.16,
+      "end": 10.7
+    },
+    {
+      "word": "and",
+      "start": 10.7,
+      "end": 11.08
+    },
+    {
+      "word": "upstriving,",
+      "start": 11.08,
+      "end": 12.24
+    },
+    {
+      "word": "a",
+      "start": 12.18,
+      "end": 12.26
+    },
+    {
+      "word": "kind",
+      "start": 12.26,
+      "end": 12.52
+    },
+    {
+      "word": "of",
+      "start": 12.52,
+      "end": 12.68
+    },
+    {
+      "word": "tropical",
+      "start": 12.68,
+      "end": 13.24
+    },
+    {
+      "word": "tempo",
+      "start": 13.24,
+      "end": 13.72
+    },
+    {
+      "word": "in",
+      "start": 13.72,
+      "end": 13.98
+    },
+    {
+      "word": "the",
+      "start": 13.98,
+      "end": 14.1
+    },
+    {
+      "word": "rivalry",
+      "start": 14.1,
+      "end": 14.56
+    },
+    {
+      "word": "of",
+      "start": 14.56,
+      "end": 14.78
+    },
+    {
+      "word": "growth,",
+      "start": 14.78,
+      "end": 15.6
+    },
+    {
+      "word": "and",
+      "start": 15.6,
+      "end": 15.72
+    },
+    {
+      "word": "an",
+      "start": 15.72,
+      "end": 15.84
+    },
+    {
+      "word": "extraordinary",
+      "start": 15.84,
+      "end": 16.5
+    },
+    {
+      "word": "decay",
+      "start": 16.5,
+      "end": 17.02
+    },
+    {
+      "word": "and",
+      "start": 17.02,
+      "end": 17.24
+    },
+    {
+      "word": "self-destruction,",
+      "start": 17.24,
+      "end": 18.64
+    },
+    {
+      "word": "owing",
+      "start": 18.56,
+      "end": 18.78
+    },
+    {
+      "word": "to",
+      "start": 18.78,
+      "end": 19.02
+    },
+    {
+      "word": "the",
+      "start": 19.02,
+      "end": 19.2
+    },
+    {
+      "word": "savagely",
+      "start": 19.2,
+      "end": 19.72
+    },
+    {
+      "word": "opposing",
+      "start": 19.72,
+      "end": 20.26
+    },
+    {
+      "word": "and",
+      "start": 20.26,
+      "end": 20.52
+    },
+    {
+      "word": "seemingly",
+      "start": 20.52,
+      "end": 21
+    },
+    {
+      "word": "exploding",
+      "start": 21,
+      "end": 21.7
+    },
+    {
+      "word": "egoisms,",
+      "start": 21.7,
+      "end": 22.88
+    },
+    {
+      "word": "which",
+      "start": 22.82,
+      "end": 22.96
+    },
+    {
+      "word": "strive",
+      "start": 22.96,
+      "end": 23.36
+    },
+    {
+      "word": "with",
+      "start": 23.36,
+      "end": 23.6
+    },
+    {
+      "word": "one",
+      "start": 23.6,
+      "end": 23.78
+    },
+    {
+      "word": "another",
+      "start": 23.78,
+      "end": 24.06
+    },
+    {
+      "word": "for",
+      "start": 24.06,
+      "end": 24.36
+    },
+    {
+      "word": "sun",
+      "start": 24.36,
+      "end": 24.66
+    },
+    {
+      "word": "and",
+      "start": 24.66,
+      "end": 24.88
+    },
+    {
+      "word": "light,",
+      "start": 24.88,
+      "end": 25.68
+    },
+    {
+      "word": "and",
+      "start": 25.58,
+      "end": 25.74
+    },
+    {
+      "word": "can",
+      "start": 25.74,
+      "end": 25.94
+    },
+    {
+      "word": "no",
+      "start": 25.94,
+      "end": 26.08
+    },
+    {
+      "word": "longer",
+      "start": 26.08,
+      "end": 26.44
+    },
+    {
+      "word": "assign",
+      "start": 26.44,
+      "end": 26.92
+    },
+    {
+      "word": "any",
+      "start": 26.92,
+      "end": 27.18
+    },
+    {
+      "word": "limit,",
+      "start": 27.18,
+      "end": 27.92
+    },
+    {
+      "word": "restraint,",
+      "start": 27.92,
+      "end": 28.3
+    },
+    {
+      "word": "or",
+      "start": 28.3,
+      "end": 28.36
+    },
+    {
+      "word": "forbearance",
+      "start": 28.36,
+      "end": 28.96
+    },
+    {
+      "word": "for",
+      "start": 28.96,
+      "end": 29.16
+    },
+    {
+      "word": "themselves",
+      "start": 29.16,
+      "end": 29.48
+    },
+    {
+      "word": "by",
+      "start": 29.16,
+      "end": 29.94
+    },
+    {
+      "word": "means",
+      "start": 29.94,
+      "end": 30.24
+    },
+    {
+      "word": "of",
+      "start": 30.24,
+      "end": 30.44
+    },
+    {
+      "word": "the",
+      "start": 30.44,
+      "end": 30.58
+    },
+    {
+      "word": "hitherto",
+      "start": 30.58,
+      "end": 30.94
+    },
+    {
+      "word": "existing",
+      "start": 30.94,
+      "end": 31.5
+    },
+    {
+      "word": "morality.",
+      "start": 31.5,
+      "end": 31.92
+    }
+  ],
+  "segments": [
+    {
+      "id": 0,
+      "seek": 0,
+      "start": 0,
+      "end": 6.32,
+      "text": " At this turning point of history there manifest themselves, side by side and often mixed and entangled together,",
+      "tokens": [
+        50365,
+        1711,
+        341,
+        6246,
+        935,
+        295,
+        2503,
+        456,
+        10067,
+        2969,
+        11,
+        1252,
+        538,
+        1252,
+        293,
+        2049,
+        7467,
+        293,
+        948,
+        39101,
+        1214,
+        11,
+        50681
+      ],
+      "temperature": 0,
+      "avg_logprob": -0.12975723,
+      "compression_ratio": 1.6624472,
+      "no_speech_prob": 0.0030751294
+    },
+    {
+      "id": 1,
+      "seek": 0,
+      "start": 6.32,
+      "end": 11.76,
+      "text": " a magnificent, manifold, virgin-forest-like upgrowth and upstriving,",
+      "tokens": [
+        50681,
+        257,
+        23690,
+        11,
+        47138,
+        11,
+        26404,
+        12,
+        36629,
+        12,
+        4092,
+        493,
+        49747,
+        293,
+        493,
+        372,
+        470,
+        798,
+        11,
+        50953
+      ],
+      "temperature": 0,
+      "avg_logprob": -0.12975723,
+      "compression_ratio": 1.6624472,
+      "no_speech_prob": 0.0030751294
+    },
+    {
+      "id": 2,
+      "seek": 0,
+      "start": 12.14,
+      "end": 15.16,
+      "text": " a kind of tropical tempo in the rivalry of growth,",
+      "tokens": [
+        50972,
+        257,
+        733,
+        295,
+        22857,
+        8972,
+        294,
+        264,
+        42352,
+        295,
+        4599,
+        11,
+        51123
+      ],
+      "temperature": 0,
+      "avg_logprob": -0.12975723,
+      "compression_ratio": 1.6624472,
+      "no_speech_prob": 0.0030751294
+    },
+    {
+      "id": 3,
+      "seek": 0,
+      "start": 15.52,
+      "end": 18.16,
+      "text": " and an extraordinary decay and self-destruction,",
+      "tokens": [
+        51141,
+        293,
+        364,
+        10581,
+        21039,
+        293,
+        2698,
+        12,
+        23748,
+        3826,
+        11,
+        51273
+      ],
+      "temperature": 0,
+      "avg_logprob": -0.12975723,
+      "compression_ratio": 1.6624472,
+      "no_speech_prob": 0.0030751294
+    },
+    {
+      "id": 4,
+      "seek": 0,
+      "start": 18.52,
+      "end": 22.4,
+      "text": " owing to the savagely opposing and seemingly exploding egoisms,",
+      "tokens": [
+        51291,
+        277,
+        7904,
+        281,
+        264,
+        11163,
+        559,
+        736,
+        27890,
+        293,
+        18709,
+        35175,
+        14495,
+        13539,
+        11,
+        51485
+      ],
+      "temperature": 0,
+      "avg_logprob": -0.12975723,
+      "compression_ratio": 1.6624472,
+      "no_speech_prob": 0.0030751294
+    },
+    {
+      "id": 5,
+      "seek": 0,
+      "start": 22.74,
+      "end": 25.2,
+      "text": " which strive with one another for sun and light,",
+      "tokens": [
+        51502,
+        597,
+        23829,
+        365,
+        472,
+        1071,
+        337,
+        3295,
+        293,
+        1442,
+        11,
+        51625
+      ],
+      "temperature": 0,
+      "avg_logprob": -0.12975723,
+      "compression_ratio": 1.6624472,
+      "no_speech_prob": 0.0030751294
+    },
+    {
+      "id": 6,
+      "seek": 2520,
+      "start": 25.2,
+      "end": 29.62,
+      "text": " and can no longer assign any limit, restraint, or forbearance for themselves",
+      "tokens": [
+        50365,
+        293,
+        393,
+        572,
+        2854,
+        6269,
+        604,
+        4948,
+        11,
+        49281,
+        11,
+        420,
+        337,
+        26738,
+        719,
+        337,
+        2969,
+        50586
+      ],
+      "temperature": 0,
+      "avg_logprob": -0.059048586,
+      "compression_ratio": 1.2765957,
+      "no_speech_prob": 0.004752514
+    },
+    {
+      "id": 7,
+      "seek": 2520,
+      "start": 29.62,
+      "end": 32,
+      "text": " by means of the hitherto existing morality.",
+      "tokens": [
+        50586,
+        538,
+        1355,
+        295,
+        264,
+        276,
+        355,
+        13098,
+        6741,
+        29106,
+        13,
+        50705
+      ],
+      "temperature": 0,
+      "avg_logprob": -0.059048586,
+      "compression_ratio": 1.2765957,
+      "no_speech_prob": 0.004752514
+    }
+  ],
+  "x_groq": {
+    "id": "req_01knt865vge2y9rn76md8b17yd"
+  }
+}
