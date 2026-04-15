@@ -18,6 +18,7 @@ if str(SRC_DIR) not in sys.path:
 from groq_whisper_service.service import (
     RealtimeTranscriptionService,
     RealtimeTranscriptionServiceConfig,
+    ServiceState,
 )
 
 
@@ -137,6 +138,153 @@ class RealtimeServiceTests(unittest.TestCase):
         self.assertTrue(final_events)
         self.assertEqual(final_events[-1]["committed_text"], "alpha")
         self.assertIsNone(service.snapshot()["error"])
+
+
+def _make_service(**overrides):
+    config = RealtimeTranscriptionServiceConfig(
+        window_seconds=0.10,
+        hop_seconds=0.05,
+        commit_lag_seconds=0.0,
+    )
+    defaults = dict(
+        capture_factory=FakeCapture,
+        api_key_loader=lambda _: "test-key",
+        client_factory=lambda _: object(),
+        transcribe_func=lambda *args, **kwargs: make_transcription("hello"),
+    )
+    defaults.update(overrides)
+    return RealtimeTranscriptionService(config, **defaults)
+
+
+class StateTransitionTests(unittest.TestCase):
+    def test_initial_state_is_idle(self) -> None:
+        service = _make_service()
+        self.assertEqual(service._state, ServiceState.idle)
+        snapshot = service.snapshot()
+        self.assertEqual(snapshot["state"], "idle")
+
+    def test_health_returns_ok_regardless_of_state(self) -> None:
+        service = _make_service()
+        self.assertEqual(service.health(), {"status": "ok"})
+
+    def test_start_transitions_to_running(self) -> None:
+        service = _make_service()
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            result = service.start()
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["state"], "running")
+            self.assertEqual(service._state, ServiceState.running)
+            service.stop()
+
+    def test_start_from_running_fails(self) -> None:
+        service = _make_service()
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            service.start()
+            result = service.start()
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["state"], "running")
+            service.stop()
+
+    def test_stop_from_idle_fails(self) -> None:
+        service = _make_service()
+        result = service.stop()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["state"], "idle")
+
+    def test_pause_resume_cycle(self) -> None:
+        service = _make_service()
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            service.start()
+            pause_result = service.pause()
+            self.assertTrue(pause_result["ok"])
+            self.assertEqual(pause_result["state"], "paused")
+            self.assertEqual(service._state, ServiceState.paused)
+
+            resume_result = service.resume()
+            self.assertTrue(resume_result["ok"])
+            self.assertEqual(resume_result["state"], "running")
+            self.assertEqual(service._state, ServiceState.running)
+
+            service.stop()
+
+    def test_pause_from_idle_fails(self) -> None:
+        service = _make_service()
+        result = service.pause()
+        self.assertFalse(result["ok"])
+
+    def test_resume_from_running_fails(self) -> None:
+        service = _make_service()
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            service.start()
+            result = service.resume()
+            self.assertFalse(result["ok"])
+            service.stop()
+
+    def test_stop_from_paused_succeeds(self) -> None:
+        service = _make_service()
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            service.start()
+            service.pause()
+            result = service.stop()
+            self.assertTrue(result["ok"])
+            self.assertEqual(result["state"], "idle")
+
+    def test_preflight_failure_transitions_to_error(self) -> None:
+        def bad_key_loader(_):
+            raise ValueError("bad key")
+
+        service = _make_service(api_key_loader=bad_key_loader)
+        result = service.start()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["state"], "error")
+        self.assertIn("API key", result["error"])
+
+    def test_start_from_error_state_succeeds(self) -> None:
+        call_count = 0
+
+        def flaky_key_loader(_):
+            nonlocal call_count
+            call_count += 1
+            if call_count <= 1:
+                raise ValueError("bad key")
+            return "test-key"
+
+        service = _make_service(api_key_loader=flaky_key_loader)
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            result1 = service.start()
+            self.assertFalse(result1["ok"])
+            self.assertEqual(service._state, ServiceState.error)
+
+            result2 = service.start()
+            self.assertTrue(result2["ok"])
+            self.assertEqual(service._state, ServiceState.running)
+            service.stop()
+
+    def test_snapshot_includes_state_and_model(self) -> None:
+        service = _make_service()
+        snapshot = service.snapshot()
+        self.assertIn("state", snapshot)
+        self.assertIn("model", snapshot)
+        self.assertIn("preflight_results", snapshot)
+        self.assertEqual(snapshot["state"], "idle")
 
 
 if __name__ == "__main__":

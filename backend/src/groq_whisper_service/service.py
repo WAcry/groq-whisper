@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from enum import Enum
 import io
 import queue
 import subprocess
@@ -24,6 +25,14 @@ from .stable_prefix import AggregatorConfig, PatchEvent, StablePrefixAggregator
 
 DEFAULT_CAPTURE_POLL_INTERVAL_SECONDS = 0.25
 DEFAULT_CAPTURE_RETENTION_SECONDS = 120.0
+
+
+class ServiceState(str, Enum):
+    idle = "idle"
+    preflight = "preflight"
+    running = "running"
+    paused = "paused"
+    error = "error"
 
 
 class AudioWindowLike(Protocol):
@@ -162,14 +171,17 @@ class RealtimeTranscriptionService:
         self.state_lock = threading.Lock()
         self.subscribers_lock = threading.Lock()
         self.stop_event = threading.Event()
+        self._paused = threading.Event()
         self.worker_thread: threading.Thread | None = None
         self.capture: AudioCaptureLike | None = None
         self.client: Any = None
         self.started_at_monotonic: float | None = None
         self.latest_patch_payload: dict[str, Any] | None = None
         self.last_error: str | None = None
+        self._state: ServiceState = ServiceState.idle
         self.running = False
         self.subscribers: set[queue.Queue[dict[str, Any]]] = set()
+        self._preflight_results: dict[str, Any] | None = None
 
         self.aggregator = self._build_aggregator()
 
@@ -182,11 +194,57 @@ class RealtimeTranscriptionService:
             )
         )
 
-    def start(self) -> None:
-        if self.worker_thread is not None and self.worker_thread.is_alive():
-            return
+    def _preflight(self) -> dict[str, Any]:
+        results: dict[str, Any] = {
+            "api_key": False,
+            "ffmpeg": False,
+            "errors": [],
+        }
+        try:
+            self.api_key_loader(self.config.api_key_file)
+            results["api_key"] = True
+        except Exception as exc:
+            results["errors"].append(f"API key: {exc}")
+        try:
+            proc = subprocess.run(
+                ["ffmpeg", "-version"],
+                capture_output=True,
+                timeout=5.0,
+            )
+            results["ffmpeg"] = proc.returncode == 0
+            if proc.returncode != 0:
+                results["errors"].append("ffmpeg returned non-zero exit code")
+        except FileNotFoundError:
+            results["errors"].append("ffmpeg not found on PATH")
+        except Exception as exc:
+            results["errors"].append(f"ffmpeg check: {exc}")
+        return results
+
+    def start(self) -> dict[str, Any]:
+        with self.state_lock:
+            if self._state not in (ServiceState.idle, ServiceState.error):
+                return {
+                    "ok": False,
+                    "state": self._state.value,
+                    "error": f"Cannot start from state '{self._state.value}'",
+                }
+            self._state = ServiceState.preflight
+
+        preflight = self._preflight()
+        self._preflight_results = preflight
+
+        if preflight["errors"]:
+            with self.state_lock:
+                self._state = ServiceState.error
+                self.last_error = "; ".join(preflight["errors"])
+            return {
+                "ok": False,
+                "state": ServiceState.error.value,
+                "error": self.last_error,
+            }
 
         self.stop_event.clear()
+        self._paused.clear()
         self.last_error = None
         self.latest_patch_payload = None
         self.aggregator = self._build_aggregator()
@@ -197,6 +255,7 @@ class RealtimeTranscriptionService:
         self.capture.start()
 
         with self.state_lock:
+            self._state = ServiceState.running
             self.running = True
 
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
@@ -210,8 +269,18 @@ class RealtimeTranscriptionService:
                 "commit_lag_seconds": self.config.commit_lag_seconds,
             }
         )
+        return {"ok": True, "state": ServiceState.running.value}
 
-    def stop(self) -> None:
+    def stop(self) -> dict[str, Any]:
+        with self.state_lock:
+            if self._state not in (ServiceState.running, ServiceState.paused):
+                return {
+                    "ok": False,
+                    "state": self._state.value,
+                    "error": f"Cannot stop from state '{self._state.value}'",
+                }
+
+        self._paused.clear()
         self.stop_event.set()
         worker = self.worker_thread
         if worker is not None and worker.is_alive():
@@ -222,24 +291,49 @@ class RealtimeTranscriptionService:
         self.worker_thread = None
         with self.state_lock:
             self.running = False
+            self._state = ServiceState.idle
+        return {"ok": True, "state": ServiceState.idle.value}
+
+    def pause(self) -> dict[str, Any]:
+        with self.state_lock:
+            if self._state != ServiceState.running:
+                return {
+                    "ok": False,
+                    "state": self._state.value,
+                    "error": f"Cannot pause from state '{self._state.value}'",
+                }
+            self._paused.set()
+            self._state = ServiceState.paused
+        self._publish({"type": "service.paused"})
+        return {"ok": True, "state": ServiceState.paused.value}
+
+    def resume(self) -> dict[str, Any]:
+        with self.state_lock:
+            if self._state != ServiceState.paused:
+                return {
+                    "ok": False,
+                    "state": self._state.value,
+                    "error": f"Cannot resume from state '{self._state.value}'",
+                }
+            self._paused.clear()
+            self._state = ServiceState.running
+        self._publish({"type": "service.resumed"})
+        return {"ok": True, "state": ServiceState.running.value}
 
     def snapshot(self) -> dict[str, Any]:
         with self.state_lock:
             return {
+                "state": self._state.value,
                 "running": self.running,
                 "started_at_monotonic": self.started_at_monotonic,
                 "error": self.last_error,
                 "latest_patch": self.latest_patch_payload,
+                "preflight_results": self._preflight_results,
+                "model": self.config.model,
             }
 
     def health(self) -> dict[str, Any]:
-        snapshot = self.snapshot()
-        status = "ok" if snapshot["running"] and snapshot["error"] is None else "degraded"
-        return {
-            "status": status,
-            "running": snapshot["running"],
-            "error": snapshot["error"],
-        }
+        return {"status": "ok"}
 
     def subscribe(self, *, replay_latest: bool = True) -> queue.Queue[dict[str, Any]]:
         subscriber: queue.Queue[dict[str, Any]] = queue.Queue(maxsize=64)
@@ -307,6 +401,10 @@ class RealtimeTranscriptionService:
                 raise RuntimeError("The live transcription service was not initialized")
 
             while not self.stop_event.is_set():
+                if self._paused.is_set():
+                    self.stop_event.wait(0.5)
+                    continue
+
                 tick_end_monotonic = (
                     self.started_at_monotonic + (tick_index * self.config.hop_seconds)
                 )
@@ -351,6 +449,8 @@ class RealtimeTranscriptionService:
                 tick_index += 1
         except Exception as exc:
             self._publish_error(str(exc))
+            with self.state_lock:
+                self._state = ServiceState.error
         finally:
             try:
                 if tick_index > 1:
@@ -377,3 +477,5 @@ class RealtimeTranscriptionService:
                     self.capture = None
                 with self.state_lock:
                     self.running = False
+                    if self._state == ServiceState.running:
+                        self._state = ServiceState.idle

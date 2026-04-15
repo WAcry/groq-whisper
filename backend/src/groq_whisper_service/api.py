@@ -24,7 +24,6 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
-        active_service.start()
         try:
             yield
         finally:
@@ -57,6 +56,30 @@ def create_app(
                 active_service.unsubscribe(subscriber)
 
         return StreamingResponse(stream(), media_type="text/event-stream")
+
+    @app.post("/start")
+    def start() -> JSONResponse:
+        result = active_service.start()
+        status_code = 200 if result["ok"] else 409
+        return JSONResponse(result, status_code=status_code)
+
+    @app.post("/stop")
+    def stop() -> JSONResponse:
+        result = active_service.stop()
+        status_code = 200 if result["ok"] else 409
+        return JSONResponse(result, status_code=status_code)
+
+    @app.post("/pause")
+    def pause() -> JSONResponse:
+        result = active_service.pause()
+        status_code = 200 if result["ok"] else 409
+        return JSONResponse(result, status_code=status_code)
+
+    @app.post("/resume")
+    def resume() -> JSONResponse:
+        result = active_service.resume()
+        status_code = 200 if result["ok"] else 409
+        return JSONResponse(result, status_code=status_code)
 
     return app
 
