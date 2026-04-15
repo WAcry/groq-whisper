@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 import sqlite3
+import threading
 import uuid
 from typing import Any
 
@@ -31,13 +32,15 @@ class SessionStore:
     def __init__(self, db_path: Path | None = None) -> None:
         self._db_path = db_path or DEFAULT_DB_PATH
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
         self._conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA)
 
     def close(self) -> None:
-        self._conn.close()
+        with self._lock:
+            self._conn.close()
 
     def create_session(
         self,
@@ -48,11 +51,12 @@ class SessionStore:
     ) -> str:
         session_id = uuid.uuid4().hex
         now = datetime.now(timezone.utc).isoformat()
-        self._conn.execute(
-            "INSERT INTO sessions (id, started_at, model, language, prompt) VALUES (?, ?, ?, ?, ?)",
-            (session_id, now, model, language, prompt),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO sessions (id, started_at, model, language, prompt) VALUES (?, ?, ?, ?, ?)",
+                (session_id, now, model, language, prompt),
+            )
+            self._conn.commit()
         return session_id
 
     def update_text(
@@ -62,11 +66,12 @@ class SessionStore:
         full_text: str,
         tick_count: int,
     ) -> None:
-        self._conn.execute(
-            "UPDATE sessions SET full_text = ?, tick_count = ? WHERE id = ?",
-            (full_text, tick_count, session_id),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "UPDATE sessions SET full_text = ?, tick_count = ? WHERE id = ?",
+                (full_text, tick_count, session_id),
+            )
+            self._conn.commit()
 
     def finalize_session(
         self,
@@ -93,24 +98,27 @@ class SessionStore:
             parts.append("tick_count = ?")
             params.append(tick_count)
         params.append(session_id)
-        self._conn.execute(
-            f"UPDATE sessions SET {', '.join(parts)} WHERE id = ?",
-            params,
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                f"UPDATE sessions SET {', '.join(parts)} WHERE id = ?",
+                params,
+            )
+            self._conn.commit()
 
     def update_export_path(self, session_id: str, export_path: str) -> None:
-        self._conn.execute(
-            "UPDATE sessions SET export_path = ? WHERE id = ?",
-            (export_path, session_id),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "UPDATE sessions SET export_path = ? WHERE id = ?",
+                (export_path, session_id),
+            )
+            self._conn.commit()
 
     def get_session(self, session_id: str) -> dict[str, Any] | None:
-        row = self._conn.execute(
-            "SELECT * FROM sessions WHERE id = ?",
-            (session_id,),
-        ).fetchone()
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT * FROM sessions WHERE id = ?",
+                (session_id,),
+            ).fetchone()
         if row is None:
             return None
         return dict(row)
@@ -121,18 +129,20 @@ class SessionStore:
         limit: int = 50,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        rows = self._conn.execute(
-            "SELECT id, started_at, ended_at, model, language, duration_seconds, tick_count, "
-            "substr(full_text, 1, 200) AS text_preview "
-            "FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?",
-            (limit, offset),
-        ).fetchall()
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT id, started_at, ended_at, model, language, duration_seconds, tick_count, "
+                "substr(full_text, 1, 200) AS text_preview "
+                "FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?",
+                (limit, offset),
+            ).fetchall()
         return [dict(row) for row in rows]
 
     def delete_session(self, session_id: str) -> bool:
-        cursor = self._conn.execute(
-            "DELETE FROM sessions WHERE id = ?",
-            (session_id,),
-        )
-        self._conn.commit()
+        with self._lock:
+            cursor = self._conn.execute(
+                "DELETE FROM sessions WHERE id = ?",
+                (session_id,),
+            )
+            self._conn.commit()
         return cursor.rowcount > 0

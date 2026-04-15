@@ -23,36 +23,45 @@ def _list_audio_devices() -> dict[str, Any]:
         import pyaudiowpatch as pyaudio
 
         p = pyaudio.PyAudio()
-        wasapi = p.get_host_api_info_by_type(pyaudio.paWASAPI)
-        devices: list[dict[str, Any]] = []
-        for i in range(p.get_device_count()):
-            info = p.get_device_info_by_index(i)
-            host_api = info.get("hostApi", -1)
-            if host_api != wasapi["index"]:
-                continue
-            devices.append({
-                "index": int(info["index"]),
-                "name": str(info["name"]),
-                "sample_rate": int(round(float(info["defaultSampleRate"]))),
-                "input_channels": int(info.get("maxInputChannels", 0)),
-                "output_channels": int(info.get("maxOutputChannels", 0)),
-                "is_loopback": bool(info.get("isLoopbackDevice", False)),
-            })
+        try:
+            wasapi = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+            devices: list[dict[str, Any]] = []
+            for i in range(p.get_device_count()):
+                info = p.get_device_info_by_index(i)
+                host_api = info.get("hostApi", -1)
+                if host_api != wasapi["index"]:
+                    continue
+                devices.append({
+                    "index": int(info["index"]),
+                    "name": str(info["name"]),
+                    "sample_rate": int(round(float(info["defaultSampleRate"]))),
+                    "input_channels": int(info.get("maxInputChannels", 0)),
+                    "output_channels": int(info.get("maxOutputChannels", 0)),
+                    "is_loopback": bool(info.get("isLoopbackDevice", False)),
+                })
 
-        default_mic_idx = int(wasapi.get("defaultInputDevice", -1))
-        default_speaker_idx = int(wasapi.get("defaultOutputDevice", -1))
-        p.terminate()
-        return {
-            "devices": devices,
-            "default_mic_index": default_mic_idx,
-            "default_speaker_index": default_speaker_idx,
-        }
-    except (ImportError, OSError, Exception) as exc:
+            default_mic_idx = int(wasapi.get("defaultInputDevice", -1))
+            default_speaker_idx = int(wasapi.get("defaultOutputDevice", -1))
+            return {
+                "devices": devices,
+                "default_mic_index": default_mic_idx,
+                "default_speaker_index": default_speaker_idx,
+            }
+        finally:
+            p.terminate()
+    except ImportError as exc:
         return {
             "devices": [],
             "default_mic_index": None,
             "default_speaker_index": None,
-            "error": f"Audio device enumeration not available: {exc}",
+            "error": f"Audio library not available: {exc}",
+        }
+    except Exception as exc:
+        return {
+            "devices": [],
+            "default_mic_index": None,
+            "default_speaker_index": None,
+            "error": f"Audio device enumeration failed: {exc}",
         }
 
 
@@ -61,11 +70,15 @@ def create_app(
 ) -> FastAPI:
     from .persistence import SessionStore
 
-    session_store = SessionStore()
-    if service is None:
-        active_service = RealtimeTranscriptionService(session_store=session_store)
-    else:
+    if service is not None:
         active_service = service
+        session_store = getattr(service, "session_store", None)
+        if session_store is None:
+            session_store = SessionStore()
+            active_service.session_store = session_store
+    else:
+        session_store = SessionStore()
+        active_service = RealtimeTranscriptionService(session_store=session_store)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -73,6 +86,8 @@ def create_app(
             yield
         finally:
             active_service.stop()
+            if session_store is not None:
+                session_store.close()
 
     app = FastAPI(title="Groq Whisper Service", lifespan=lifespan)
 

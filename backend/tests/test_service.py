@@ -311,6 +311,48 @@ class StateTransitionTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(service.config.model, "whisper-large-v3")
 
+    def test_update_config_rejects_invalid_values(self) -> None:
+        service = _make_service()
+        result = service.update_config({"hop_seconds": 0})
+        self.assertFalse(result["ok"])
+        self.assertIn("hop_seconds", result["error"])
+        self.assertEqual(service.config.hop_seconds, 0.05)
+
+    def test_start_rollback_on_capture_failure(self) -> None:
+        def bad_capture_factory(config):
+            raise RuntimeError("capture device unavailable")
+
+        service = _make_service(capture_factory=bad_capture_factory)
+        result = service.start()
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["state"], "error")
+        self.assertIn("capture device", result["error"])
+        self.assertIsNone(service.capture)
+
+    def test_immediate_stop_finalizes_session(self) -> None:
+        import tempfile
+        from groq_whisper_service.persistence import SessionStore
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        store = SessionStore(db_path=Path(tmp.name))
+        service = _make_service(session_store=store)
+
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            service.start()
+            session_id = service._current_session_id
+            self.assertIsNotNone(session_id)
+
+            service.stop()
+
+            session = store.get_session(session_id)
+            self.assertIsNotNone(session["ended_at"])
+
+        store.close()
+        Path(tmp.name).unlink(missing_ok=True)
+
 
 class ApiEndpointTests(unittest.TestCase):
     def setUp(self) -> None:

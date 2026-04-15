@@ -203,6 +203,17 @@ class RealtimeTranscriptionService:
             )
         )
 
+    @staticmethod
+    def _validate_config(config: RealtimeTranscriptionServiceConfig) -> list[str]:
+        errors = []
+        if config.window_seconds <= 0.0:
+            errors.append("window_seconds must be positive")
+        if config.hop_seconds <= 0.0:
+            errors.append("hop_seconds must be positive")
+        if config.commit_lag_seconds < 0.0:
+            errors.append("commit_lag_seconds must be non-negative")
+        return errors
+
     def update_config(self, overrides: dict[str, Any]) -> dict[str, Any]:
         with self.state_lock:
             if self._state not in (ServiceState.idle, ServiceState.error):
@@ -211,18 +222,26 @@ class RealtimeTranscriptionService:
                     "state": self._state.value,
                     "error": "Settings can only be changed when idle",
                 }
-        allowed_fields = {
-            "model", "prompt", "language", "window_seconds",
-            "hop_seconds", "commit_lag_seconds", "api_key_file",
-        }
-        current = asdict(self.config)
-        for key, value in overrides.items():
-            if key in allowed_fields:
-                if key == "api_key_file" and value is not None:
-                    value = Path(value)
-                current[key] = value
-        self.config = RealtimeTranscriptionServiceConfig(**current)
-        return {"ok": True, "state": self._state.value}
+            allowed_fields = {
+                "model", "prompt", "language", "window_seconds",
+                "hop_seconds", "commit_lag_seconds", "api_key_file",
+            }
+            current = asdict(self.config)
+            for key, value in overrides.items():
+                if key in allowed_fields:
+                    if key == "api_key_file" and value is not None:
+                        value = Path(value)
+                    current[key] = value
+            candidate = RealtimeTranscriptionServiceConfig(**current)
+            validation_errors = self._validate_config(candidate)
+            if validation_errors:
+                return {
+                    "ok": False,
+                    "state": self._state.value,
+                    "error": "; ".join(validation_errors),
+                }
+            self.config = candidate
+            return {"ok": True, "state": self._state.value}
 
     def _preflight(self) -> dict[str, Any]:
         results: dict[str, Any] = {
@@ -258,6 +277,12 @@ class RealtimeTranscriptionService:
                     "state": self._state.value,
                     "error": f"Cannot start from state '{self._state.value}'",
                 }
+            if self.worker_thread is not None and self.worker_thread.is_alive():
+                return {
+                    "ok": False,
+                    "state": self._state.value,
+                    "error": "Previous worker thread is still alive",
+                }
             self._state = ServiceState.preflight
 
         preflight = self._preflight()
@@ -273,27 +298,47 @@ class RealtimeTranscriptionService:
                 "error": self.last_error,
             }
 
-        self.stop_event.clear()
-        self._paused.clear()
-        self.last_error = None
-        self.latest_patch_payload = None
-        self.aggregator = self._build_aggregator()
-        self.started_at_monotonic = self.clock()
-        api_key = self.api_key_loader(self.config.api_key_file)
-        self.client = self.client_factory(api_key)
-        self.capture = self.capture_factory(self.config)
-        self.capture.start()
+        try:
+            self.stop_event.clear()
+            self._paused.clear()
+            self.last_error = None
+            self.latest_patch_payload = None
+            self.aggregator = self._build_aggregator()
+            self.started_at_monotonic = self.clock()
+            api_key = self.api_key_loader(self.config.api_key_file)
+            self.client = self.client_factory(api_key)
+            self.capture = self.capture_factory(self.config)
+            self.capture.start()
+        except Exception as exc:
+            if self.capture is not None:
+                try:
+                    self.capture.stop()
+                except Exception:
+                    pass
+                self.capture = None
+            self.client = None
+            with self.state_lock:
+                self._state = ServiceState.error
+                self.last_error = str(exc)
+            return {
+                "ok": False,
+                "state": ServiceState.error.value,
+                "error": self.last_error,
+            }
 
         with self.state_lock:
             self._state = ServiceState.running
             self.running = True
 
         if self.session_store is not None:
-            self._current_session_id = self.session_store.create_session(
-                model=self.config.model,
-                language=self.config.language,
-                prompt=self.config.prompt,
-            )
+            try:
+                self._current_session_id = self.session_store.create_session(
+                    model=self.config.model,
+                    language=self.config.language,
+                    prompt=self.config.prompt,
+                )
+            except Exception:
+                self._current_session_id = None
 
         self.worker_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.worker_thread.start()
@@ -322,14 +367,41 @@ class RealtimeTranscriptionService:
         worker = self.worker_thread
         if worker is not None and worker.is_alive():
             worker.join(timeout=15.0)
+            if worker.is_alive():
+                with self.state_lock:
+                    self._state = ServiceState.error
+                    self.last_error = "Worker thread did not stop within timeout"
+                return {
+                    "ok": False,
+                    "state": ServiceState.error.value,
+                    "error": self.last_error,
+                }
         elif self.capture is not None:
             self.capture.stop()
             self.capture = None
         self.worker_thread = None
+        self._finalize_dangling_session()
         with self.state_lock:
             self.running = False
             self._state = ServiceState.idle
         return {"ok": True, "state": ServiceState.idle.value}
+
+    def _finalize_dangling_session(self) -> None:
+        if self.session_store is None or self._current_session_id is None:
+            return
+        try:
+            session = self.session_store.get_session(self._current_session_id)
+            if session is not None and session.get("ended_at") is None:
+                duration_s = None
+                if self.started_at_monotonic is not None:
+                    duration_s = self.clock() - self.started_at_monotonic
+                self.session_store.finalize_session(
+                    self._current_session_id,
+                    duration_seconds=duration_s,
+                )
+        except Exception:
+            pass
+        self._current_session_id = None
 
     def pause(self) -> dict[str, Any]:
         with self.state_lock:
@@ -432,8 +504,9 @@ class RealtimeTranscriptionService:
                     tick_count=payload.get("tick_index", 0),
                     duration_seconds=duration_s,
                 )
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Session persistence failed: %s", exc)
 
     def _persist_error(self, message: str) -> None:
         if self.session_store is None or self._current_session_id is None:
@@ -447,8 +520,9 @@ class RealtimeTranscriptionService:
                 error_log=message,
                 duration_seconds=duration_s,
             )
-        except Exception:
-            pass
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Session error persistence failed: %s", exc)
 
     def _build_patch_payload(
         self,
