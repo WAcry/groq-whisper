@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="GroqWhisper.Pages.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    NavigationCacheMode="Required">
+
+    <ScrollViewer Padding="24">
+        <StackPanel Spacing="16" MaxWidth="600" HorizontalAlignment="Left">
+            <TextBlock Text="Settings"
+                       Style="{StaticResource SubtitleTextBlockStyle}" />
+
+            <TextBox x:Name="ApiKeyPathBox"
+                     Header="API Key File Path"
+                     PlaceholderText="Path to GROQ_APIKEY file" />
+
+            <ComboBox x:Name="DefaultModelBox"
+                      Header="Default Model"
+                      SelectedIndex="0"
+                      Width="300">
+                <ComboBoxItem Content="Speed (whisper-large-v3-turbo)" Tag="whisper-large-v3-turbo" />
+                <ComboBoxItem Content="Accuracy (whisper-large-v3)" Tag="whisper-large-v3" />
+            </ComboBox>
+
+            <TextBox x:Name="LanguageBox"
+                     Header="Language (optional)"
+                     PlaceholderText="e.g., en, zh, ja" />
+
+            <NumberBox x:Name="WindowSecondsBox"
+                       Header="Window Seconds"
+                       Value="30"
+                       Minimum="5" Maximum="120"
+                       SpinButtonPlacementMode="Compact" />
+
+            <NumberBox x:Name="HopSecondsBox"
+                       Header="Hop Seconds"
+                       Value="5"
+                       Minimum="1" Maximum="30"
+                       SpinButtonPlacementMode="Compact" />
+
+            <Button Content="Save Settings"
+                    Style="{StaticResource AccentButtonStyle}"
+                    Click="Save_Click" />
+
+            <TextBlock x:Name="StatusText"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                       FontSize="12" />
+        </StackPanel>
+    </ScrollViewer>
+</Page>

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="GroqWhisper.Pages.LivePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:GroqWhisper.ViewModels"
+    NavigationCacheMode="Required">
+
+    <Grid Padding="24" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Status Bar -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="16">
+            <Border CornerRadius="4" Padding="8,4"
+                    Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}">
+                <TextBlock Text="{x:Bind ViewModel.StateDisplay, Mode=OneWay}"
+                           FontSize="12" />
+            </Border>
+            <TextBlock VerticalAlignment="Center" FontSize="12"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                <Run Text="Model:" />
+                <Run Text="{x:Bind ViewModel.ModelDisplay, Mode=OneWay}" FontWeight="SemiBold" />
+            </TextBlock>
+            <TextBlock VerticalAlignment="Center" FontSize="12"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                <Run Text="Duration:" />
+                <Run Text="{x:Bind ViewModel.DurationDisplay, Mode=OneWay}" FontWeight="SemiBold" />
+            </TextBlock>
+            <TextBlock VerticalAlignment="Center" FontSize="12"
+                       Foreground="{ThemeResource TextFillColorSecondaryBrush}">
+                <Run Text="Ticks:" />
+                <Run Text="{x:Bind ViewModel.TickCount, Mode=OneWay}" FontWeight="SemiBold" />
+            </TextBlock>
+            <TextBlock VerticalAlignment="Center" FontSize="12"
+                       Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                       Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
+                       Visibility="{x:Bind ViewModel.HasError, Mode=OneWay}" />
+        </StackPanel>
+
+        <!-- Transcription Area -->
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      Background="{ThemeResource LayerFillColorDefaultBrush}"
+                      CornerRadius="8"
+                      Padding="16">
+            <RichTextBlock x:Name="TranscriptionBlock"
+                           FontSize="16"
+                           LineHeight="28"
+                           TextWrapping="Wrap"
+                           IsTextSelectionEnabled="True">
+                <Paragraph>
+                    <Run x:Name="CommittedRun"
+                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                         Text="{x:Bind ViewModel.CommittedText, Mode=OneWay}" />
+                    <Run x:Name="TailRun"
+                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                         Text="{x:Bind ViewModel.TailText, Mode=OneWay}" />
+                </Paragraph>
+            </RichTextBlock>
+        </ScrollViewer>
+
+        <!-- Control Bar -->
+        <CommandBar Grid.Row="2" DefaultLabelPosition="Right">
+            <AppBarButton Label="Start" Icon="Play"
+                          Command="{x:Bind ViewModel.StartCommand}" />
+            <AppBarButton Label="Pause" Icon="Pause"
+                          Command="{x:Bind ViewModel.PauseCommand}" />
+            <AppBarButton Label="Stop" Icon="Stop"
+                          Command="{x:Bind ViewModel.StopCommand}" />
+            <AppBarSeparator />
+            <AppBarElementContainer>
+                <ComboBox x:Name="ModelSelector"
+                          Width="160"
+                          SelectedIndex="{x:Bind ViewModel.SelectedModelIndex, Mode=TwoWay}"
+                          SelectionChanged="ModelSelector_SelectionChanged">
+                    <ComboBoxItem Content="Speed" Tag="whisper-large-v3-turbo" />
+                    <ComboBoxItem Content="Accuracy" Tag="whisper-large-v3" />
+                </ComboBox>
+            </AppBarElementContainer>
+            <CommandBar.SecondaryCommands>
+                <AppBarButton Label="Copy" Icon="Copy"
+                              Command="{x:Bind ViewModel.CopyCommand}" />
+                <AppBarButton Label="Export" Icon="Save"
+                              Command="{x:Bind ViewModel.ExportCommand}" />
+            </CommandBar.SecondaryCommands>
+        </CommandBar>
+    </Grid>
+</Page>

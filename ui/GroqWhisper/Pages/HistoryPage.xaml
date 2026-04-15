@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="GroqWhisper.Pages.HistoryPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="using:GroqWhisper.Models"
+    NavigationCacheMode="Required">
+
+    <Grid Padding="24" RowSpacing="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8">
+            <TextBlock Text="Session History"
+                       Style="{StaticResource SubtitleTextBlockStyle}" />
+            <Button Content="Refresh" Click="Refresh_Click" />
+        </StackPanel>
+
+        <ListView Grid.Row="1"
+                  x:Name="SessionList"
+                  ItemsSource="{x:Bind ViewModel.Sessions, Mode=OneWay}"
+                  SelectionMode="Single"
+                  SelectionChanged="SessionList_SelectionChanged">
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="models:Session">
+                    <Grid Padding="8" ColumnSpacing="16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="{x:Bind StartedAt}"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock Grid.Column="1" Text="{x:Bind TextPreview}"
+                                   TextTrimming="CharacterEllipsis"
+                                   MaxLines="1" />
+                        <TextBlock Grid.Column="2" Text="{x:Bind Model}"
+                                   FontSize="12"
+                                   Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                        <Button Grid.Column="3" Content="Delete"
+                                Tag="{x:Bind Id}"
+                                Click="Delete_Click" />
+                    </Grid>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</Page>
