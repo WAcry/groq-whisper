@@ -1,20 +1,59 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 import json
 import queue
-from typing import Iterator
+from typing import Any, Iterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from .service import RealtimeTranscriptionService
+from .service import RealtimeTranscriptionService, ServiceState
 
 
 def _encode_sse(payload: dict[str, object]) -> bytes:
     event_type = str(payload.get("type", "message"))
     data = json.dumps(payload, ensure_ascii=False)
     return f"event: {event_type}\ndata: {data}\n\n".encode("utf-8")
+
+
+def _list_audio_devices() -> dict[str, Any]:
+    try:
+        import pyaudiowpatch as pyaudio
+
+        p = pyaudio.PyAudio()
+        wasapi = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+        devices: list[dict[str, Any]] = []
+        for i in range(p.get_device_count()):
+            info = p.get_device_info_by_index(i)
+            host_api = info.get("hostApi", -1)
+            if host_api != wasapi["index"]:
+                continue
+            devices.append({
+                "index": int(info["index"]),
+                "name": str(info["name"]),
+                "sample_rate": int(round(float(info["defaultSampleRate"]))),
+                "input_channels": int(info.get("maxInputChannels", 0)),
+                "output_channels": int(info.get("maxOutputChannels", 0)),
+                "is_loopback": bool(info.get("isLoopbackDevice", False)),
+            })
+
+        default_mic_idx = int(wasapi.get("defaultInputDevice", -1))
+        default_speaker_idx = int(wasapi.get("defaultOutputDevice", -1))
+        p.terminate()
+        return {
+            "devices": devices,
+            "default_mic_index": default_mic_idx,
+            "default_speaker_index": default_speaker_idx,
+        }
+    except (ImportError, OSError, Exception) as exc:
+        return {
+            "devices": [],
+            "default_mic_index": None,
+            "default_speaker_index": None,
+            "error": f"Audio device enumeration not available: {exc}",
+        }
 
 
 def create_app(
@@ -58,7 +97,17 @@ def create_app(
         return StreamingResponse(stream(), media_type="text/event-stream")
 
     @app.post("/start")
-    def start() -> JSONResponse:
+    async def start(request: Request) -> JSONResponse:
+        body: dict[str, Any] = {}
+        if request.headers.get("content-type", "").startswith("application/json"):
+            try:
+                body = await request.json()
+            except Exception:
+                pass
+        if body:
+            result = active_service.update_config(body)
+            if not result["ok"]:
+                return JSONResponse(result, status_code=409)
         result = active_service.start()
         status_code = 200 if result["ok"] else 409
         return JSONResponse(result, status_code=status_code)
@@ -78,6 +127,24 @@ def create_app(
     @app.post("/resume")
     def resume() -> JSONResponse:
         result = active_service.resume()
+        status_code = 200 if result["ok"] else 409
+        return JSONResponse(result, status_code=status_code)
+
+    @app.get("/devices")
+    def devices() -> JSONResponse:
+        return JSONResponse(_list_audio_devices())
+
+    @app.get("/settings")
+    def get_settings() -> JSONResponse:
+        config_dict = asdict(active_service.config)
+        if config_dict.get("api_key_file") is not None:
+            config_dict["api_key_file"] = str(config_dict["api_key_file"])
+        return JSONResponse(config_dict)
+
+    @app.put("/settings")
+    async def put_settings(request: Request) -> JSONResponse:
+        body = await request.json()
+        result = active_service.update_config(body)
         status_code = 200 if result["ok"] else 409
         return JSONResponse(result, status_code=status_code)
 

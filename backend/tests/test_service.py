@@ -286,6 +286,132 @@ class StateTransitionTests(unittest.TestCase):
         self.assertIn("preflight_results", snapshot)
         self.assertEqual(snapshot["state"], "idle")
 
+    def test_update_config_when_idle(self) -> None:
+        service = _make_service()
+        result = service.update_config({"model": "whisper-large-v3", "language": "en"})
+        self.assertTrue(result["ok"])
+        self.assertEqual(service.config.model, "whisper-large-v3")
+        self.assertEqual(service.config.language, "en")
+
+    def test_update_config_when_running_fails(self) -> None:
+        service = _make_service()
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            service.start()
+            result = service.update_config({"model": "whisper-large-v3"})
+            self.assertFalse(result["ok"])
+            self.assertEqual(service.config.model, "whisper-large-v3-turbo")
+            service.stop()
+
+    def test_update_config_ignores_unknown_fields(self) -> None:
+        service = _make_service()
+        result = service.update_config({"model": "whisper-large-v3", "unknown_field": 42})
+        self.assertTrue(result["ok"])
+        self.assertEqual(service.config.model, "whisper-large-v3")
+
+
+class ApiEndpointTests(unittest.TestCase):
+    def setUp(self) -> None:
+        from starlette.testclient import TestClient
+        from groq_whisper_service.api import create_app
+
+        self.service = _make_service()
+        self.app = create_app(self.service)
+        self.client = TestClient(self.app)
+
+    def test_healthz_returns_ok(self) -> None:
+        resp = self.client.get("/healthz")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["status"], "ok")
+
+    def test_state_returns_idle(self) -> None:
+        resp = self.client.get("/state")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["state"], "idle")
+
+    def test_start_stop_cycle(self) -> None:
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            resp = self.client.post("/start")
+            self.assertEqual(resp.status_code, 200)
+            self.assertTrue(resp.json()["ok"])
+
+            resp = self.client.get("/state")
+            self.assertEqual(resp.json()["state"], "running")
+
+            resp = self.client.post("/stop")
+            self.assertEqual(resp.status_code, 200)
+            self.assertTrue(resp.json()["ok"])
+
+    def test_stop_from_idle_returns_409(self) -> None:
+        resp = self.client.post("/stop")
+        self.assertEqual(resp.status_code, 409)
+
+    def test_pause_resume_via_api(self) -> None:
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            self.client.post("/start")
+            resp = self.client.post("/pause")
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json()["state"], "paused")
+
+            resp = self.client.post("/resume")
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json()["state"], "running")
+            self.client.post("/stop")
+
+    def test_settings_get(self) -> None:
+        resp = self.client.get("/settings")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("model", data)
+        self.assertIn("window_seconds", data)
+
+    def test_settings_put_when_idle(self) -> None:
+        resp = self.client.put("/settings", json={"model": "whisper-large-v3"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(resp.json()["ok"])
+
+        resp = self.client.get("/settings")
+        self.assertEqual(resp.json()["model"], "whisper-large-v3")
+
+    def test_settings_put_when_running_returns_409(self) -> None:
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            self.client.post("/start")
+            resp = self.client.put("/settings", json={"model": "whisper-large-v3"})
+            self.assertEqual(resp.status_code, 409)
+            self.client.post("/stop")
+
+    def test_start_with_config_overrides(self) -> None:
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            resp = self.client.post(
+                "/start",
+                json={"model": "whisper-large-v3", "language": "zh"},
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(self.service.config.model, "whisper-large-v3")
+            self.assertEqual(self.service.config.language, "zh")
+            self.client.post("/stop")
+
+    def test_devices_returns_list(self) -> None:
+        resp = self.client.get("/devices")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("devices", data)
+        self.assertIsInstance(data["devices"], list)
+
 
 if __name__ == "__main__":
     unittest.main()

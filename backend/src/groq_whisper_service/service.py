@@ -194,6 +194,27 @@ class RealtimeTranscriptionService:
             )
         )
 
+    def update_config(self, overrides: dict[str, Any]) -> dict[str, Any]:
+        with self.state_lock:
+            if self._state not in (ServiceState.idle, ServiceState.error):
+                return {
+                    "ok": False,
+                    "state": self._state.value,
+                    "error": "Settings can only be changed when idle",
+                }
+        allowed_fields = {
+            "model", "prompt", "language", "window_seconds",
+            "hop_seconds", "commit_lag_seconds", "api_key_file",
+        }
+        current = asdict(self.config)
+        for key, value in overrides.items():
+            if key in allowed_fields:
+                if key == "api_key_file" and value is not None:
+                    value = Path(value)
+                current[key] = value
+        self.config = RealtimeTranscriptionServiceConfig(**current)
+        return {"ok": True, "state": self._state.value}
+
     def _preflight(self) -> dict[str, Any]:
         results: dict[str, Any] = {
             "api_key": False,
