@@ -318,17 +318,20 @@ Transform the existing groq-whisper streaming transcription backend into a compl
 
 | Milestone | Status |
 |-----------|--------|
-| 1. Git Setup | Not started |
-| 2. Backend State Machine | Not started |
-| 3. Control Endpoints | Not started |
-| 4. SQLite Session Persistence | Not started |
-| 5. WinUI 3 Scaffold & Navigation | Not started |
-| 6. Live Transcription Page | Not started |
-| 7. History & Settings Pages | Not started |
+| 1. Git Setup | Done |
+| 2. Backend State Machine | Done |
+| 3. Control Endpoints | Done |
+| 4. SQLite Session Persistence | Done |
+| 5. WinUI 3 Scaffold & Navigation | Done |
+| 6. Live Transcription Page | Done |
+| 7. History & Settings Pages | Done |
+| Review Fix Pass | Done |
 
 ## Surprises & Discoveries
 
-(To be filled during implementation)
+- Python 3.12 via uv required venv for dependency isolation (system site-packages locked)
+- Codex review found 7 issues (2 critical) in backend thread safety and state management
+- All fixed: worker race, SQLite locking, config TOCTOU, start rollback, session finalize
 
 ## Decision Log
 
@@ -347,4 +350,22 @@ Transform the existing groq-whisper streaming transcription backend into a compl
 
 ## Outcomes & Retrospective
 
-(To be filled after completion)
+All 7 milestones + 1 review fix pass completed. Final state:
+
+**Backend** (Python):
+- `ServiceState` enum with 5 states, enforced transitions, preflight checks
+- 7 new API endpoints: `/start`, `/stop`, `/pause`, `/resume`, `/devices`, `/settings`, `/sessions`
+- SQLite persistence with thread-safe `SessionStore`, hooks in `_publish()`
+- Robust error handling: rollback on start failure, dangling session finalize, logged persistence errors
+- **100 tests pass** (61 original + 39 new)
+
+**Frontend** (WinUI 3 / C#):
+- Windows App SDK 1.5+, `net8.0-windows10.0.19041.0`, CommunityToolkit.Mvvm
+- 4-page NavigationView: Live, History, Devices, Settings
+- Live page: RichTextBlock with committed/tail text split, SSE streaming, Start/Pause/Stop/Copy/Export
+- History page: session list with detail view and delete
+- Settings page: API key, model, language, window/hop seconds
+- BackendService: process manager + health polling
+- TranscriptionApiClient: full REST + SSE `IAsyncEnumerable` client
+
+**Git**: 6 clean commits on master branch
