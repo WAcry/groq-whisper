@@ -393,6 +393,7 @@ class RealtimeTranscriptionService:
             self.capture.stop()
             self.capture = None
         self.worker_thread = None
+        self.client = None
         self._finalize_dangling_session()
         with self.state_lock:
             self.running = False
@@ -693,6 +694,7 @@ class RealtimeTranscriptionService:
                     )
             finally:
                 self._safe_stop_capture(signal_paused=False)
+                self.client = None
                 with self.state_lock:
                     self.running = False
                     if self._state == ServiceState.running:

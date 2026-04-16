@@ -137,11 +137,20 @@ public sealed partial class SettingsPage : Page
         StatusText.Text = "Revealed API key cleared from the form.";
     }
 
-    private void ClearKey_Click(object sender, RoutedEventArgs e)
+    private async Task<bool> EnsureCanMutateSettingsAsync(string blockedMessage)
     {
-        if (!BackendState.CanMutateSettings)
+        await BackendState.RefreshAsync();
+        if (BackendState.CanMutateSettings)
+            return true;
+
+        StatusText.Text = blockedMessage;
+        return false;
+    }
+
+    private async void ClearKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (!await EnsureCanMutateSettingsAsync("Stop the active transcription session before clearing the stored key."))
         {
-            StatusText.Text = "Stop the active transcription session before clearing the stored key.";
             return;
         }
 
@@ -164,9 +173,8 @@ public sealed partial class SettingsPage : Page
         var shouldClearEditorFields = false;
         try
         {
-            if (!BackendState.CanMutateSettings)
+            if (!await EnsureCanMutateSettingsAsync("Stop the active transcription session before saving settings."))
             {
-                StatusText.Text = "Stop the active transcription session before saving settings.";
                 return;
             }
 

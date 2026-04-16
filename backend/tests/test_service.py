@@ -217,6 +217,39 @@ class StateTransitionTests(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertEqual(result["state"], "idle")
 
+    def test_stop_clears_client_reference(self) -> None:
+        client = object()
+        service = _make_service(client_factory=lambda _: client)
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            service.start(api_key="test-key")
+            self.assertIs(service.client, client)
+
+            service.stop()
+
+        self.assertIsNone(service.client)
+
+    def test_runtime_error_clears_client_reference(self) -> None:
+        client = object()
+        service = _make_service(
+            client_factory=lambda _: client,
+            transcribe_func=mock.Mock(side_effect=RuntimeError("boom")),
+        )
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            service.start(api_key="test-key")
+
+            deadline = time.perf_counter() + 1.0
+            while time.perf_counter() < deadline and service._state != ServiceState.error:
+                time.sleep(0.01)
+
+        self.assertEqual(service._state, ServiceState.error)
+        self.assertIsNone(service.client)
+
     def test_pause_resume_cycle(self) -> None:
         service = _make_service()
         with mock.patch(

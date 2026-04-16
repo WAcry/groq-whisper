@@ -281,11 +281,13 @@ public partial class LiveViewModel : ObservableObject
                         case "service.paused":
                             _currentState = ServiceState.Paused;
                             StateDisplay = "Paused";
+                            _backendState?.OnPauseSucceeded();
                             break;
 
                         case "service.resumed":
                             _currentState = ServiceState.Running;
                             StateDisplay = "Running";
+                            _backendState?.OnResumeSucceeded();
                             var resumed = evt.Deserialize<Dictionary<string, string>>();
                             if (resumed?.TryGetValue("session_id", out var newSid) == true)
                                 _currentSessionId = newSid;
