@@ -9,12 +9,16 @@ public sealed partial class BackendStateCoordinator : ObservableObject
     [ObservableProperty]
     private string _currentState = "idle";
 
+    [ObservableProperty]
+    private bool _lastRefreshSucceeded = true;
+
     public BackendStateCoordinator(Func<CancellationToken, Task<string>>? stateReader = null)
     {
         _stateReader = stateReader;
     }
 
     public bool CanMutateSettings =>
+        LastRefreshSucceeded &&
         !CurrentState.Equals("running", StringComparison.OrdinalIgnoreCase) &&
         !CurrentState.Equals("paused", StringComparison.OrdinalIgnoreCase) &&
         !CurrentState.Equals("preflight", StringComparison.OrdinalIgnoreCase);
@@ -24,15 +28,21 @@ public sealed partial class BackendStateCoordinator : ObservableObject
         OnPropertyChanged(nameof(CanMutateSettings));
     }
 
-    public async Task RefreshAsync(CancellationToken cancellationToken = default)
+    partial void OnLastRefreshSucceededChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanMutateSettings));
+    }
+
+    public async Task<bool> RefreshAsync(CancellationToken cancellationToken = default)
     {
         if (_stateReader is null)
-            return;
+            return false;
 
         try
         {
             var state = await _stateReader(cancellationToken);
-            SetState(state);
+            SetKnownState(state);
+            return true;
         }
         catch (OperationCanceledException)
         {
@@ -40,13 +50,21 @@ public sealed partial class BackendStateCoordinator : ObservableObject
         }
         catch
         {
+            LastRefreshSucceeded = false;
             if (!IsActiveSessionState(CurrentState))
-                SetState("disconnected");
+                CurrentState = "unknown";
+            return false;
         }
     }
 
     public void SetState(string? state)
     {
+        SetKnownState(state);
+    }
+
+    private void SetKnownState(string? state)
+    {
+        LastRefreshSucceeded = true;
         CurrentState = string.IsNullOrWhiteSpace(state) ? "unknown" : state.Trim().ToLowerInvariant();
     }
 

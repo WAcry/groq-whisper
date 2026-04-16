@@ -80,9 +80,18 @@ public sealed partial class SettingsPage : Page
         HopSecondsBox.IsEnabled = canMutate;
         ApiKeyPasswordBox.IsEnabled = canMutate;
         ApiKeyRevealBox.IsEnabled = canMutate;
-        MutatingStateText.Text = canMutate
-            ? ""
-            : "Stop the active transcription session before changing settings or the stored key.";
+        if (canMutate)
+        {
+            MutatingStateText.Text = "";
+        }
+        else if (!BackendState.LastRefreshSucceeded)
+        {
+            MutatingStateText.Text = "Backend state could not be verified. Reconnect the backend before changing settings or the stored key.";
+        }
+        else
+        {
+            MutatingStateText.Text = "Stop the active transcription session before changing settings or the stored key.";
+        }
     }
 
     private string GetKeyDraft()
@@ -143,7 +152,12 @@ public sealed partial class SettingsPage : Page
 
     private async Task<bool> EnsureCanMutateSettingsAsync(string blockedMessage)
     {
-        await BackendState.RefreshAsync();
+        var refreshSucceeded = await BackendState.RefreshAsync();
+        if (!refreshSucceeded)
+        {
+            StatusText.Text = "Could not verify backend state. Try again after the backend reconnects.";
+            return false;
+        }
         if (BackendState.CanMutateSettings)
             return true;
 

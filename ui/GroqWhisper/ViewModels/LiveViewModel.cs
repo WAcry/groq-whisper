@@ -172,6 +172,16 @@ public partial class LiveViewModel : ObservableObject
             {
                 ErrorMessage = err.GetString() ?? "Stop failed";
                 ErrorVisibility = Visibility.Visible;
+                if (result.TryGetProperty("state", out var stateValue))
+                {
+                    var state = ServiceStateExtensions.Parse(stateValue.GetString());
+                    if (state == ServiceState.Error)
+                    {
+                        _currentState = ServiceState.Error;
+                        StateDisplay = "Error";
+                        _backendState?.OnError();
+                    }
+                }
             }
             await Task.Delay(500);
             StopEventStream();

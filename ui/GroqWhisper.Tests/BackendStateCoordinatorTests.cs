@@ -23,8 +23,9 @@ public sealed class BackendStateCoordinatorTests
 
         await coordinator.RefreshAsync();
 
-        Assert.Equal("disconnected", coordinator.CurrentState);
-        Assert.True(coordinator.CanMutateSettings);
+        Assert.Equal("unknown", coordinator.CurrentState);
+        Assert.False(coordinator.LastRefreshSucceeded);
+        Assert.False(coordinator.CanMutateSettings);
     }
 
     [Fact]
@@ -36,6 +37,7 @@ public sealed class BackendStateCoordinatorTests
         await coordinator.RefreshAsync();
 
         Assert.Equal("running", coordinator.CurrentState);
+        Assert.False(coordinator.LastRefreshSucceeded);
         Assert.False(coordinator.CanMutateSettings);
     }
 
@@ -66,6 +68,28 @@ public sealed class BackendStateCoordinatorTests
         Assert.True(coordinator.CanMutateSettings);
 
         coordinator.OnBackendDisconnected();
+        Assert.True(coordinator.CanMutateSettings);
+    }
+
+    [Fact]
+    public async Task SuccessfulRefreshRestoresMutationAfterFailure()
+    {
+        var shouldFail = true;
+        var coordinator = new BackendStateCoordinator(_ =>
+        {
+            if (shouldFail)
+                throw new InvalidOperationException("boom");
+            return Task.FromResult("idle");
+        });
+
+        await coordinator.RefreshAsync();
+        Assert.False(coordinator.CanMutateSettings);
+
+        shouldFail = false;
+        await coordinator.RefreshAsync();
+
+        Assert.True(coordinator.LastRefreshSucceeded);
+        Assert.Equal("idle", coordinator.CurrentState);
         Assert.True(coordinator.CanMutateSettings);
     }
 }
