@@ -194,6 +194,9 @@ def create_app(
 
     @app.delete("/sessions/{session_id}")
     def delete_session(session_id: str) -> JSONResponse:
+        snapshot = active_service.snapshot()
+        if snapshot.get("session_id") == session_id and snapshot.get("state") in ("running", "paused"):
+            return JSONResponse({"error": "Cannot delete active session"}, status_code=409)
         deleted = session_store.delete_session(session_id)
         if not deleted:
             return JSONResponse({"error": "Session not found"}, status_code=404)

@@ -32,12 +32,13 @@ public partial class App : Application
                 var dialog = new Microsoft.UI.Xaml.Controls.ContentDialog
                 {
                     Title = "Backend Error",
-                    Content = $"Failed to start the backend service:\n{ex.Message}",
+                    Content = $"Failed to start the backend service:\n{ex.Message}\n\nThe application will close.",
                     CloseButtonText = "OK",
                     XamlRoot = xamlRoot,
                 };
                 await dialog.ShowAsync();
             }
+            MainWindowInstance.Close();
             return;
         }
 

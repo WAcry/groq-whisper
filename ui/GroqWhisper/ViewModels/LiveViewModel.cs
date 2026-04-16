@@ -101,6 +101,11 @@ public partial class LiveViewModel : ObservableObject
                 _currentState = ServiceState.Paused;
                 StateDisplay = "Paused";
             }
+            else if (result.TryGetProperty("error", out var err))
+            {
+                ErrorMessage = err.GetString() ?? "Pause failed";
+                ErrorVisibility = Visibility.Visible;
+            }
         }
         catch (Exception ex) { ErrorMessage = ex.Message; ErrorVisibility = Visibility.Visible; }
     }
@@ -118,6 +123,11 @@ public partial class LiveViewModel : ObservableObject
                 if (result.TryGetProperty("session_id", out var sid))
                     _currentSessionId = sid.GetString();
             }
+            else if (result.TryGetProperty("error", out var err))
+            {
+                ErrorMessage = err.GetString() ?? "Resume failed";
+                ErrorVisibility = Visibility.Visible;
+            }
         }
         catch (Exception ex) { ErrorMessage = ex.Message; ErrorVisibility = Visibility.Visible; }
     }
@@ -133,7 +143,11 @@ public partial class LiveViewModel : ObservableObject
                 _currentState = ServiceState.Idle;
                 StateDisplay = "Idle";
             }
-            // Wait briefly for the final patch to arrive, then stop the stream
+            else if (result.TryGetProperty("error", out var err))
+            {
+                ErrorMessage = err.GetString() ?? "Stop failed";
+                ErrorVisibility = Visibility.Visible;
+            }
             await Task.Delay(500);
             StopEventStream();
         }
