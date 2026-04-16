@@ -40,13 +40,22 @@ public sealed partial class BackendStateCoordinator : ObservableObject
         }
         catch
         {
-            SetState("disconnected");
+            if (!IsActiveSessionState(CurrentState))
+                SetState("disconnected");
         }
     }
 
     public void SetState(string? state)
     {
         CurrentState = string.IsNullOrWhiteSpace(state) ? "unknown" : state.Trim().ToLowerInvariant();
+    }
+
+    private static bool IsActiveSessionState(string? state)
+    {
+        return state is not null && (
+            state.Equals("running", StringComparison.OrdinalIgnoreCase) ||
+            state.Equals("paused", StringComparison.OrdinalIgnoreCase) ||
+            state.Equals("preflight", StringComparison.OrdinalIgnoreCase));
     }
 
     public void OnStartSucceeded() => SetState("running");

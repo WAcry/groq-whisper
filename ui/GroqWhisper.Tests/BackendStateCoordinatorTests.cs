@@ -28,6 +28,18 @@ public sealed class BackendStateCoordinatorTests
     }
 
     [Fact]
+    public async Task RefreshFailureDoesNotUnlockActiveSessionState()
+    {
+        var coordinator = new BackendStateCoordinator(_ => throw new InvalidOperationException("boom"));
+        coordinator.OnStartSucceeded();
+
+        await coordinator.RefreshAsync();
+
+        Assert.Equal("running", coordinator.CurrentState);
+        Assert.False(coordinator.CanMutateSettings);
+    }
+
+    [Fact]
     public void RunningPausedAndPreflightBlockSettingsMutation()
     {
         var coordinator = new BackendStateCoordinator();

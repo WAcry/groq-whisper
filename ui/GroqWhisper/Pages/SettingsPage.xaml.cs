@@ -133,12 +133,8 @@ public sealed partial class SettingsPage : Page
 
     private void Hide_Click(object sender, RoutedEventArgs e)
     {
-        ApiKeyPasswordBox.Password = ApiKeyRevealBox.Text;
-        ApiKeyRevealBox.Text = "";
-        ApiKeyRevealBox.Visibility = Visibility.Collapsed;
-        ApiKeyPasswordBox.Visibility = Visibility.Visible;
-        HideButton.Visibility = Visibility.Collapsed;
-        RevealButton.Visibility = Visibility.Visible;
+        ClearEditorFields();
+        StatusText.Text = "Revealed API key cleared from the form.";
     }
 
     private void ClearKey_Click(object sender, RoutedEventArgs e)
@@ -157,6 +153,7 @@ public sealed partial class SettingsPage : Page
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
+        var storedKeyUpdated = false;
         try
         {
             if (!BackendState.CanMutateSettings)
@@ -167,7 +164,6 @@ public sealed partial class SettingsPage : Page
 
             var settings = new Dictionary<string, object>();
             var keyDraft = GetKeyDraft();
-            var storedKeyUpdated = false;
             if (!string.IsNullOrWhiteSpace(keyDraft))
             {
                 SecretStore.SaveGroqApiKey(keyDraft);
@@ -202,7 +198,9 @@ public sealed partial class SettingsPage : Page
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error: {ex.Message}";
+            StatusText.Text = storedKeyUpdated
+                ? $"API key saved locally, but backend settings were not applied: {ex.Message}"
+                : $"Error: {ex.Message}";
         }
     }
 }
