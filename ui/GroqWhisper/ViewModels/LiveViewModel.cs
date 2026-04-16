@@ -192,6 +192,15 @@ public partial class LiveViewModel : ObservableObject
         _eventCts = null;
     }
 
+    public void HandleBackendDisconnected()
+    {
+        StopEventStream();
+        _currentState = ServiceState.Error;
+        StateDisplay = "Backend Disconnected";
+        ErrorMessage = "Backend process exited unexpectedly";
+        ErrorVisibility = Visibility.Visible;
+    }
+
     private async Task ProcessEventsAsync(CancellationToken ct)
     {
         try

@@ -1,3 +1,4 @@
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using GroqWhisper.Services;
 
@@ -6,8 +7,9 @@ namespace GroqWhisper;
 public partial class App : Application
 {
     public static BackendService Backend { get; } = new();
-    public static TranscriptionApiClient? Api { get; private set; }
+    public static TranscriptionApiClient? Api { get; set; }
     public static Window? MainWindowInstance { get; private set; }
+    public static event Action? BackendDisconnected;
 
     public App()
     {
@@ -16,10 +18,6 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
-        MainWindowInstance = new MainWindow();
-        MainWindowInstance.Closed += OnWindowClosed;
-        MainWindowInstance.Activate();
-
         try
         {
             await Backend.LaunchAsync();
@@ -27,16 +25,37 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
-            if (MainWindowInstance?.Content?.XamlRoot is not { } xamlRoot) return;
-            var dialog = new Microsoft.UI.Xaml.Controls.ContentDialog
+            MainWindowInstance = new MainWindow();
+            MainWindowInstance.Activate();
+            if (MainWindowInstance.Content?.XamlRoot is { } xamlRoot)
             {
-                Title = "Backend Error",
-                Content = $"Failed to start the backend service:\n{ex.Message}",
-                CloseButtonText = "OK",
-                XamlRoot = xamlRoot,
-            };
-            await dialog.ShowAsync();
+                var dialog = new Microsoft.UI.Xaml.Controls.ContentDialog
+                {
+                    Title = "Backend Error",
+                    Content = $"Failed to start the backend service:\n{ex.Message}",
+                    CloseButtonText = "OK",
+                    XamlRoot = xamlRoot,
+                };
+                await dialog.ShowAsync();
+            }
+            return;
         }
+
+        Backend.BackendExited += OnBackendExited;
+
+        MainWindowInstance = new MainWindow();
+        MainWindowInstance.Closed += OnWindowClosed;
+        MainWindowInstance.Activate();
+    }
+
+    private void OnBackendExited(int exitCode)
+    {
+        var dispatcher = MainWindowInstance?.DispatcherQueue;
+        dispatcher?.TryEnqueue(() =>
+        {
+            Api = null;
+            BackendDisconnected?.Invoke();
+        });
     }
 
     private void OnWindowClosed(object sender, WindowEventArgs args)

@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using GroqWhisper.ViewModels;
 
@@ -10,12 +11,20 @@ public sealed partial class LivePage : Page
     public LivePage()
     {
         InitializeComponent();
-        Loaded += async (_, _) =>
-        {
-            if (App.Api is not null)
-                ViewModel.SetApiClient(App.Api);
-            await ViewModel.LoadModelFromSettingsAsync();
-        };
+        Loaded += OnLoaded;
+        App.BackendDisconnected += OnBackendDisconnected;
+    }
+
+    private async void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        if (App.Api is not null)
+            ViewModel.SetApiClient(App.Api);
+        await ViewModel.LoadModelFromSettingsAsync();
+    }
+
+    private void OnBackendDisconnected()
+    {
+        ViewModel.HandleBackendDisconnected();
     }
 
     private void ModelSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
