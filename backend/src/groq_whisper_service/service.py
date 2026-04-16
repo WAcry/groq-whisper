@@ -7,7 +7,6 @@ import queue
 import subprocess
 import threading
 import time
-from pathlib import Path
 from typing import Any, Callable, Protocol
 import wave
 
@@ -17,7 +16,6 @@ from .rolling_transcriber import (
     DEFAULT_GRANULARITIES,
     DEFAULT_MODEL,
     create_client,
-    load_api_key,
     transcribe_bytes,
 )
 from .stable_prefix import AggregatorConfig, PatchEvent, StablePrefixAggregator
@@ -77,7 +75,6 @@ class RealtimeTranscriptionServiceConfig:
     commit_lag_seconds: float = 7.0
     poll_interval_seconds: float = DEFAULT_CAPTURE_POLL_INTERVAL_SECONDS
     capture_retention_seconds: float = DEFAULT_CAPTURE_RETENTION_SECONDS
-    api_key_file: Path | None = None
 
 
 def build_default_capture(
@@ -155,7 +152,6 @@ class RealtimeTranscriptionService:
         config: RealtimeTranscriptionServiceConfig | None = None,
         *,
         capture_factory: CaptureFactory | None = None,
-        api_key_loader: Callable[[Path | None], str] = load_api_key,
         client_factory: Callable[[str], Any] = create_client,
         transcribe_func: Callable[..., dict[str, Any]] = transcribe_bytes,
         clock: Callable[[], float] = time.perf_counter,
@@ -170,7 +166,6 @@ class RealtimeTranscriptionService:
             raise ValueError("commit_lag_seconds must be non-negative")
 
         self.capture_factory = capture_factory or build_default_capture
-        self.api_key_loader = api_key_loader
         self.client_factory = client_factory
         self.transcribe_func = transcribe_func
         self.clock = clock
@@ -223,15 +218,19 @@ class RealtimeTranscriptionService:
                     "state": self._state.value,
                     "error": "Settings can only be changed when idle",
                 }
+            if "api_key" in overrides or "api_key_file" in overrides:
+                return {
+                    "ok": False,
+                    "state": self._state.value,
+                    "error": "Secrets are not accepted in /settings. Save the API key in the Windows app settings and send it only in POST /start.",
+                }
             allowed_fields = {
                 "model", "prompt", "language", "window_seconds",
-                "hop_seconds", "commit_lag_seconds", "api_key_file",
+                "hop_seconds", "commit_lag_seconds",
             }
             current = asdict(self.config)
             for key, value in overrides.items():
                 if key in allowed_fields:
-                    if key == "api_key_file" and value is not None:
-                        value = Path(value)
                     current[key] = value
             candidate = RealtimeTranscriptionServiceConfig(**current)
             validation_errors = self._validate_config(candidate)
@@ -245,12 +244,12 @@ class RealtimeTranscriptionService:
             return {"ok": True, "state": self._state.value}
 
     def _resolve_api_key(self, explicit_api_key: str | None = None) -> str:
-        if explicit_api_key is not None:
-            normalized = explicit_api_key.strip()
-            if not normalized:
-                raise ValueError("Missing API key. Save a key in Settings and try again.")
-            return normalized
-        return self.api_key_loader(self.config.api_key_file)
+        if explicit_api_key is None:
+            raise ValueError("Missing API key. Save a key in Settings and try again.")
+        normalized = explicit_api_key.strip()
+        if not normalized:
+            raise ValueError("Missing API key. Save a key in Settings and try again.")
+        return normalized
 
     def _preflight(self, explicit_api_key: str | None = None) -> dict[str, Any]:
         results: dict[str, Any] = {

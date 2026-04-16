@@ -39,11 +39,13 @@
 pip install -e .
 ```
 
-设置 API Key：
+设置 CLI / backend shell 的 API Key：
 
 ```powershell
 $env:GROQ_API_KEY = "your-groq-api-key"
 ```
+
+WinUI product flow no longer reads a plaintext key file. The desktop app stores the key in Windows user-scoped secure storage from the Settings page and sends it to the backend only in `POST /start`.
 
 ## 启动服务
 
@@ -64,6 +66,14 @@ python -m groq_whisper_service --host 127.0.0.1 --port 8000
 - `GET /healthz`
 - `GET /state`
 - `GET /events`
+- `GET /settings`
+- `PUT /settings`
+- `POST /start`
+- `POST /stop`
+- `POST /pause`
+- `POST /resume`
+- `GET /devices`
+- `GET /sessions`
 
 `/events` 返回 SSE，事件类型包括：
 
@@ -83,5 +93,5 @@ python -m groq_whisper_service --host 127.0.0.1 --port 8000
 
 ## 说明
 
-- `transcribe.py` 仍然保留为离线 rolling CLI 入口，便于复用原 demo 的测试和调试路径。
+- `transcribe.py` 仍然保留为离线 rolling CLI 入口，便于复用原 demo 的测试和调试路径。It now requires `GROQ_API_KEY`; `--key-file` is no longer supported.
 - 当前实现是单会话、启动即开始采集和转写。

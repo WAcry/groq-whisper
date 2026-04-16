@@ -125,7 +125,7 @@ public sealed partial class SettingsPage : Page
             RevealButton.Visibility = Visibility.Collapsed;
             StatusText.Text = "API key revealed locally.";
         }
-        catch (InvalidOperationException ex)
+        catch (Exception ex)
         {
             StatusText.Text = ex.Message;
         }
@@ -145,15 +145,23 @@ public sealed partial class SettingsPage : Page
             return;
         }
 
-        SecretStore.ClearGroqApiKey();
-        ClearEditorFields();
-        UpdateStoredKeyState();
-        StatusText.Text = "Stored API key cleared.";
+        try
+        {
+            SecretStore.ClearGroqApiKey();
+            ClearEditorFields();
+            UpdateStoredKeyState();
+            StatusText.Text = "Stored API key cleared.";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = ex.Message;
+        }
     }
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
         var storedKeyUpdated = false;
+        var shouldClearEditorFields = false;
         try
         {
             if (!BackendState.CanMutateSettings)
@@ -164,13 +172,13 @@ public sealed partial class SettingsPage : Page
 
             var settings = new Dictionary<string, object>();
             var keyDraft = GetKeyDraft();
+            shouldClearEditorFields = true;
             if (!string.IsNullOrWhiteSpace(keyDraft))
             {
                 SecretStore.SaveGroqApiKey(keyDraft);
                 storedKeyUpdated = true;
+                UpdateStoredKeyState();
             }
-            ClearEditorFields();
-            UpdateStoredKeyState();
 
             if (DefaultModelBox.SelectedItem is ComboBoxItem modelItem)
                 settings["model"] = modelItem.Tag?.ToString() ?? "whisper-large-v3-turbo";
@@ -201,6 +209,12 @@ public sealed partial class SettingsPage : Page
             StatusText.Text = storedKeyUpdated
                 ? $"API key saved locally, but backend settings were not applied: {ex.Message}"
                 : $"Error: {ex.Message}";
+        }
+        finally
+        {
+            if (shouldClearEditorFields)
+                ClearEditorFields();
+            UpdateStoredKeyState();
         }
     }
 }

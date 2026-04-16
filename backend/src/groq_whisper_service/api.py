@@ -168,14 +168,20 @@ def create_app(
 
     @app.get("/settings")
     def get_settings() -> JSONResponse:
-        config_dict = asdict(active_service.config)
-        if config_dict.get("api_key_file") is not None:
-            config_dict["api_key_file"] = str(config_dict["api_key_file"])
-        return JSONResponse(config_dict)
+        return JSONResponse(asdict(active_service.config))
 
     @app.put("/settings")
     async def put_settings(request: Request) -> JSONResponse:
         body = await request.json()
+        secret_fields = [field for field in ("api_key", "api_key_file") if field in body]
+        if secret_fields:
+            return JSONResponse(
+                {
+                    "ok": False,
+                    "error": f"{', '.join(secret_fields)} is no longer accepted in /settings. Save the API key in the Windows app settings and send it only in POST /start.",
+                },
+                status_code=400,
+            )
         result = active_service.update_config(body)
         status_code = 200 if result["ok"] else 409
         return JSONResponse(result, status_code=status_code)
