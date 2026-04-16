@@ -384,6 +384,7 @@ class RealtimeTranscriptionService:
                 self._safe_stop_capture(signal_paused=False)
                 self.worker_thread = None
                 self.client = None
+                self._finalize_dangling_session()
                 with self.state_lock:
                     self.running = False
                     self._state = ServiceState.error

@@ -181,6 +181,52 @@ class StateTransitionTests(unittest.TestCase):
         self.assertIsNone(service.capture)
         self.assertTrue(capture.stopped)
 
+    def test_stop_timeout_finalizes_session(self) -> None:
+        import tempfile
+        from groq_whisper_service.persistence import SessionStore
+
+        class StuckWorker:
+            def join(self, timeout=None) -> None:
+                return None
+
+            def is_alive(self) -> bool:
+                return True
+
+        tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
+        tmp.close()
+        store = SessionStore(db_path=Path(tmp.name))
+        service = _make_service(session_store=store)
+        service.capture = FakeCapture(service.config)
+        service.capture.start()
+        service.client = object()
+        service.worker_thread = StuckWorker()
+        service.running = True
+        service._state = ServiceState.running
+        service.started_at_monotonic = time.perf_counter()
+        session_id = store.create_session(
+            model=service.config.model,
+            language=service.config.language,
+            prompt=service.config.prompt,
+        )
+        service._current_session_id = session_id
+
+        try:
+            result = service.stop()
+
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["state"], "error")
+            self.assertIsNone(service._current_session_id)
+            session = store.get_session(session_id)
+            self.assertIsNotNone(session)
+            self.assertEqual(session["id"], session_id)
+            self.assertIsNotNone(session["ended_at"])
+            sessions = store.list_sessions()
+            self.assertEqual(len(sessions), 1)
+            self.assertIsNotNone(sessions[0]["ended_at"])
+        finally:
+            store.close()
+            Path(tmp.name).unlink(missing_ok=True)
+
     def test_initial_state_is_idle(self) -> None:
         service = _make_service()
         self.assertEqual(service._state, ServiceState.idle)

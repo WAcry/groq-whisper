@@ -111,14 +111,18 @@ public sealed partial class SettingsPage : Page
     {
         try
         {
-            var storedKey = SecretStore.LoadGroqApiKey();
-            if (string.IsNullOrWhiteSpace(storedKey))
+            var draft = GetKeyDraft();
+            if (string.IsNullOrWhiteSpace(draft))
+                draft = SecretStore.LoadGroqApiKey();
+
+            if (string.IsNullOrWhiteSpace(draft))
             {
                 StatusText.Text = "No stored API key to reveal.";
                 return;
             }
 
-            ApiKeyRevealBox.Text = storedKey;
+            ApiKeyPasswordBox.Password = draft;
+            ApiKeyRevealBox.Text = draft;
             ApiKeyRevealBox.Visibility = Visibility.Visible;
             ApiKeyPasswordBox.Visibility = Visibility.Collapsed;
             HideButton.Visibility = Visibility.Visible;
