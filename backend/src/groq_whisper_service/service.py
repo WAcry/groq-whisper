@@ -384,6 +384,9 @@ class RealtimeTranscriptionService:
         with self.state_lock:
             self.running = False
             self._state = ServiceState.idle
+            self.last_error = None
+            self.started_at_monotonic = None
+            self.latest_patch_payload = None
         return {"ok": True, "state": ServiceState.idle.value}
 
     def _finalize_dangling_session(self) -> None:
@@ -413,6 +416,9 @@ class RealtimeTranscriptionService:
                 }
             self._paused.set()
             self._state = ServiceState.paused
+        if self.capture is not None:
+            self.capture.stop()
+            self.capture = None
         self._publish({"type": "service.paused"})
         return {"ok": True, "state": ServiceState.paused.value}
 
@@ -424,6 +430,20 @@ class RealtimeTranscriptionService:
                     "state": self._state.value,
                     "error": f"Cannot resume from state '{self._state.value}'",
                 }
+        try:
+            self.capture = self.capture_factory(self.config)
+            self.capture.start()
+            self.started_at_monotonic = self.clock()
+        except Exception as exc:
+            with self.state_lock:
+                self._state = ServiceState.error
+                self.last_error = str(exc)
+            return {
+                "ok": False,
+                "state": ServiceState.error.value,
+                "error": str(exc),
+            }
+        with self.state_lock:
             self._paused.clear()
             self._state = ServiceState.running
         self._publish({"type": "service.resumed"})
@@ -556,8 +576,7 @@ class RealtimeTranscriptionService:
                 if self._paused.is_set():
                     self.stop_event.wait(0.5)
                     if not self._paused.is_set() and not self.stop_event.is_set():
-                        elapsed = self.clock() - self.started_at_monotonic
-                        tick_index = max(tick_index, int(elapsed / self.config.hop_seconds))
+                        tick_index = 1
                     continue
 
                 tick_end_monotonic = (

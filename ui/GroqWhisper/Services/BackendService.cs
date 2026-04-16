@@ -38,7 +38,15 @@ public sealed class BackendService
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
 
-        await WaitForReadyAsync(TimeSpan.FromMilliseconds(HealthCheckTimeoutMs));
+        try
+        {
+            await WaitForReadyAsync(TimeSpan.FromMilliseconds(HealthCheckTimeoutMs));
+        }
+        catch
+        {
+            await ShutdownAsync();
+            throw;
+        }
     }
 
     public async Task WaitForReadyAsync(TimeSpan timeout)
