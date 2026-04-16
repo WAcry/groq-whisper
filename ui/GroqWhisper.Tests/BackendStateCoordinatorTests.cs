@@ -17,6 +17,17 @@ public sealed class BackendStateCoordinatorTests
     }
 
     [Fact]
+    public async Task RefreshFallsBackToDisconnectedWhenReaderFails()
+    {
+        var coordinator = new BackendStateCoordinator(_ => throw new InvalidOperationException("boom"));
+
+        await coordinator.RefreshAsync();
+
+        Assert.Equal("disconnected", coordinator.CurrentState);
+        Assert.True(coordinator.CanMutateSettings);
+    }
+
+    [Fact]
     public void RunningPausedAndPreflightBlockSettingsMutation()
     {
         var coordinator = new BackendStateCoordinator();

@@ -125,11 +125,22 @@ def create_app(
                 body = await request.json()
             except Exception:
                 pass
+        if "api_key_file" in body:
+            return JSONResponse(
+                {"ok": False, "error": "api_key_file is no longer supported. Save the API key in the Windows app settings."},
+                status_code=400,
+            )
+        api_key = body.pop("api_key", None)
+        if not isinstance(api_key, str) or not api_key.strip():
+            return JSONResponse(
+                {"ok": False, "error": "Missing API key. Save a key in Settings and try again."},
+                status_code=400,
+            )
         if body:
             result = active_service.update_config(body)
             if not result["ok"]:
                 return JSONResponse(result, status_code=409)
-        result = active_service.start()
+        result = active_service.start(api_key=api_key)
         status_code = 200 if result["ok"] else 409
         return JSONResponse(result, status_code=status_code)
 

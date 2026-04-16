@@ -29,8 +29,19 @@ public sealed partial class BackendStateCoordinator : ObservableObject
         if (_stateReader is null)
             return;
 
-        var state = await _stateReader(cancellationToken);
-        SetState(state);
+        try
+        {
+            var state = await _stateReader(cancellationToken);
+            SetState(state);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            SetState("disconnected");
+        }
     }
 
     public void SetState(string? state)
