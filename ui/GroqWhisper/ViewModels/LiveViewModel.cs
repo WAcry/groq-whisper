@@ -29,10 +29,9 @@ public partial class LiveViewModel : ObservableObject
     public LiveViewModel()
     {
         _dispatcher = DispatcherQueue.GetForCurrentThread();
-        _ = LoadModelFromSettingsAsync();
     }
 
-    private async Task LoadModelFromSettingsAsync()
+    public async Task LoadModelFromSettingsAsync()
     {
         try
         {

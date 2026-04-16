@@ -416,9 +416,6 @@ class RealtimeTranscriptionService:
                 }
             self._paused.set()
             self._state = ServiceState.paused
-        if self.capture is not None:
-            self.capture.stop()
-            self.capture = None
         self._publish({"type": "service.paused"})
         return {"ok": True, "state": ServiceState.paused.value}
 
@@ -430,6 +427,7 @@ class RealtimeTranscriptionService:
                     "state": self._state.value,
                     "error": f"Cannot resume from state '{self._state.value}'",
                 }
+        self._finalize_dangling_session()
         try:
             self.capture = self.capture_factory(self.config)
             self.capture.start()
@@ -444,6 +442,15 @@ class RealtimeTranscriptionService:
                 "state": ServiceState.error.value,
                 "error": str(exc),
             }
+        if self.session_store is not None:
+            try:
+                self._current_session_id = self.session_store.create_session(
+                    model=self.config.model,
+                    language=self.config.language,
+                    prompt=self.config.prompt,
+                )
+            except Exception:
+                self._current_session_id = None
         with self.state_lock:
             self._paused.clear()
             self._state = ServiceState.running
@@ -575,6 +582,9 @@ class RealtimeTranscriptionService:
 
             while not self.stop_event.is_set():
                 if self._paused.is_set():
+                    if self.capture is not None:
+                        self.capture.stop()
+                        self.capture = None
                     self.stop_event.wait(0.5)
                     if not self._paused.is_set() and not self.stop_event.is_set():
                         tick_index = 1
