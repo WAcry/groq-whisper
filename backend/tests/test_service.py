@@ -165,10 +165,11 @@ class StateTransitionTests(unittest.TestCase):
 
         client = object()
         capture = FakeCapture(RealtimeTranscriptionServiceConfig())
+        worker = StuckWorker()
         service = _make_service(client_factory=lambda _: client)
         service.client = client
         service.capture = capture
-        service.worker_thread = StuckWorker()
+        service.worker_thread = worker
         service.running = True
         service._state = ServiceState.running
 
@@ -177,9 +178,38 @@ class StateTransitionTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["state"], "error")
         self.assertEqual(result["error"], "Worker thread did not stop within timeout")
+        self.assertIs(service.worker_thread, worker)
         self.assertIsNone(service.client)
         self.assertIsNone(service.capture)
         self.assertTrue(capture.stopped)
+
+    def test_start_rejected_while_timed_out_worker_is_still_alive(self) -> None:
+        class StuckWorker:
+            def join(self, timeout=None) -> None:
+                return None
+
+            def is_alive(self) -> bool:
+                return True
+
+        client = object()
+        capture = FakeCapture(RealtimeTranscriptionServiceConfig())
+        worker = StuckWorker()
+        service = _make_service(client_factory=lambda _: client)
+        service.client = client
+        service.capture = capture
+        service.worker_thread = worker
+        service.running = True
+        service._state = ServiceState.running
+
+        stop_result = service.stop()
+        self.assertFalse(stop_result["ok"])
+        self.assertIs(service.worker_thread, worker)
+
+        start_result = service.start(api_key="test-key")
+
+        self.assertFalse(start_result["ok"])
+        self.assertEqual(start_result["state"], "error")
+        self.assertEqual(start_result["error"], "Previous worker thread is still alive")
 
     def test_stop_timeout_finalizes_session(self) -> None:
         import tempfile

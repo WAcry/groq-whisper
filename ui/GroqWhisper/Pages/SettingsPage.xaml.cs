@@ -174,7 +174,7 @@ public sealed partial class SettingsPage : Page
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
         var storedKeyUpdated = false;
-        var shouldClearEditorFields = true;
+        var shouldClearEditorFields = false;
         try
         {
             if (!await EnsureCanMutateSettingsAsync("Stop the active transcription session before saving settings."))
@@ -182,6 +182,7 @@ public sealed partial class SettingsPage : Page
                 return;
             }
 
+            shouldClearEditorFields = true;
             var settings = new Dictionary<string, object>();
             var keyDraft = GetKeyDraft();
             if (!string.IsNullOrWhiteSpace(keyDraft))

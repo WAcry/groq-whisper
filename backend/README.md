@@ -5,7 +5,7 @@
 - `groq-whisper-algo-demo` 里的 rolling stable-prefix 聚合算法
 - `mic-speaker-mixer` 里的 Windows 麦克风 + 扬声器 loopback 混音采集
 
-目标是启动服务后，持续采集 Windows 上的混合音频，并且每 5 秒向 Groq Whisper 发送最近 30 秒窗口，随后流式输出转录 patch 事件。
+目标是启动服务后，通过显式 `POST /start` 控制持续采集 Windows 上的混合音频，并且每 5 秒向 Groq Whisper 发送最近 30 秒窗口，随后流式输出转录 patch 事件。
 
 ## 当前实现边界
 
