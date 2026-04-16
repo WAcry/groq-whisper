@@ -593,6 +593,17 @@ class RealtimeTranscriptionService:
         )
         return payload
 
+    def _safe_stop_capture(self, *, signal_paused: bool) -> None:
+        cap = self.capture
+        self.capture = None
+        if cap is not None:
+            try:
+                cap.stop()
+            except Exception:
+                pass
+        if signal_paused:
+            self._capture_stopped.set()
+
     def _run_loop(self) -> None:
         tick_index = 1
         try:
@@ -601,10 +612,7 @@ class RealtimeTranscriptionService:
 
             while not self.stop_event.is_set():
                 if self._paused.is_set():
-                    if self.capture is not None:
-                        self.capture.stop()
-                        self.capture = None
-                    self._capture_stopped.set()
+                    self._safe_stop_capture(signal_paused=True)
                     self.stop_event.wait(0.5)
                     if not self._paused.is_set() and not self.stop_event.is_set():
                         tick_index = 1
@@ -677,9 +685,7 @@ class RealtimeTranscriptionService:
                         )
                     )
             finally:
-                if self.capture is not None:
-                    self.capture.stop()
-                    self.capture = None
+                self._safe_stop_capture(signal_paused=False)
                 with self.state_lock:
                     self.running = False
                     if self._state == ServiceState.running:

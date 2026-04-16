@@ -10,7 +10,7 @@ public sealed class TranscriptionApiClient
 {
     private readonly HttpClient _http;
 
-    public TranscriptionApiClient(string baseUrl = "http://127.0.0.1:8000")
+    public TranscriptionApiClient(string baseUrl)
     {
         _http = new HttpClient { BaseAddress = new Uri(baseUrl) };
     }

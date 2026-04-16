@@ -6,7 +6,7 @@ namespace GroqWhisper.Pages;
 
 public sealed partial class DevicesPage : Page
 {
-    private readonly TranscriptionApiClient _api = new();
+    private TranscriptionApiClient Api => App.Api ?? throw new InvalidOperationException("API client not set");
 
     public DevicesPage()
     {
@@ -23,7 +23,7 @@ public sealed partial class DevicesPage : Page
     {
         try
         {
-            var result = await _api.GetDevicesAsync();
+            var result = await Api.GetDevicesAsync();
             if (result.TryGetProperty("devices", out var devArray))
             {
                 var devices = new List<DeviceDisplay>();

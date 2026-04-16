@@ -7,7 +7,7 @@ namespace GroqWhisper.ViewModels;
 
 public partial class HistoryViewModel : ObservableObject
 {
-    private readonly TranscriptionApiClient _api = new();
+    private TranscriptionApiClient Api => App.Api ?? throw new InvalidOperationException("API client not set");
 
     public ObservableCollection<Session> Sessions { get; } = [];
 
@@ -15,7 +15,7 @@ public partial class HistoryViewModel : ObservableObject
     {
         try
         {
-            var sessions = await _api.GetSessionsAsync();
+            var sessions = await Api.GetSessionsAsync();
             Sessions.Clear();
             foreach (var s in sessions)
                 Sessions.Add(s);
@@ -27,7 +27,7 @@ public partial class HistoryViewModel : ObservableObject
     {
         try
         {
-            return await _api.GetSessionAsync(id);
+            return await Api.GetSessionAsync(id);
         }
         catch { return null; }
     }
@@ -36,7 +36,7 @@ public partial class HistoryViewModel : ObservableObject
     {
         try
         {
-            if (await _api.DeleteSessionAsync(id))
+            if (await Api.DeleteSessionAsync(id))
             {
                 var item = Sessions.FirstOrDefault(s => s.Id == id);
                 if (item is not null)

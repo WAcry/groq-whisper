@@ -9,7 +9,7 @@ namespace GroqWhisper.ViewModels;
 
 public partial class LiveViewModel : ObservableObject
 {
-    private TranscriptionApiClient _api = new();
+    private TranscriptionApiClient? _api;
     private readonly DispatcherQueue _dispatcher;
     private CancellationTokenSource? _eventCts;
 
@@ -32,10 +32,12 @@ public partial class LiveViewModel : ObservableObject
         _dispatcher = DispatcherQueue.GetForCurrentThread();
     }
 
-    public void UpdateApiBaseUrl(string baseUrl)
+    public void SetApiClient(TranscriptionApiClient api)
     {
-        _api = new TranscriptionApiClient(baseUrl);
+        _api = api;
     }
+
+    private TranscriptionApiClient Api => _api ?? throw new InvalidOperationException("API client not set");
 
     public async Task LoadModelFromSettingsAsync()
     {
@@ -43,7 +45,7 @@ public partial class LiveViewModel : ObservableObject
         {
             try
             {
-                var settings = await _api.GetSettingsAsync();
+                var settings = await Api.GetSettingsAsync();
                 if (settings.TryGetProperty("model", out var model))
                 {
                     SelectedModelId = model.GetString() ?? "whisper-large-v3-turbo";
@@ -64,7 +66,7 @@ public partial class LiveViewModel : ObservableObject
     {
         try
         {
-            var result = await _api.PostStartAsync(model: SelectedModelId);
+            var result = await Api.PostStartAsync(model: SelectedModelId);
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
             {
                 _currentState = ServiceState.Running;
@@ -92,7 +94,7 @@ public partial class LiveViewModel : ObservableObject
     {
         try
         {
-            var result = await _api.PostPauseAsync();
+            var result = await Api.PostPauseAsync();
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
             {
                 _currentState = ServiceState.Paused;
@@ -107,7 +109,7 @@ public partial class LiveViewModel : ObservableObject
     {
         try
         {
-            var result = await _api.PostResumeAsync();
+            var result = await Api.PostResumeAsync();
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
             {
                 _currentState = ServiceState.Running;
@@ -124,7 +126,7 @@ public partial class LiveViewModel : ObservableObject
     {
         try
         {
-            var result = await _api.PostStopAsync();
+            var result = await Api.PostStopAsync();
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
             {
                 _currentState = ServiceState.Idle;
@@ -169,7 +171,7 @@ public partial class LiveViewModel : ObservableObject
             {
                 try
                 {
-                    await _api.PatchSessionExportPathAsync(_currentSessionId, file.Path);
+                    await Api.PatchSessionExportPathAsync(_currentSessionId, file.Path);
                 }
                 catch { }
             }
@@ -236,6 +238,17 @@ public partial class LiveViewModel : ObservableObject
                     }
                 });
             }
+
+            if (!ct.IsCancellationRequested && _currentState == ServiceState.Running)
+            {
+                _dispatcher.TryEnqueue(() =>
+                {
+                    ErrorMessage = "Backend connection lost";
+                    ErrorVisibility = Visibility.Visible;
+                    _currentState = ServiceState.Error;
+                    StateDisplay = "Disconnected";
+                });
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
@@ -244,6 +257,8 @@ public partial class LiveViewModel : ObservableObject
             {
                 ErrorMessage = $"Event stream error: {ex.Message}";
                 ErrorVisibility = Visibility.Visible;
+                _currentState = ServiceState.Error;
+                StateDisplay = "Disconnected";
             });
         }
     }

@@ -6,7 +6,7 @@ namespace GroqWhisper.Pages;
 
 public sealed partial class SettingsPage : Page
 {
-    private readonly TranscriptionApiClient _api = new();
+    private TranscriptionApiClient Api => App.Api ?? throw new InvalidOperationException("API client not set");
 
     public SettingsPage()
     {
@@ -18,7 +18,7 @@ public sealed partial class SettingsPage : Page
     {
         try
         {
-            var settings = await _api.GetSettingsAsync();
+            var settings = await Api.GetSettingsAsync();
 
             if (settings.TryGetProperty("api_key_file", out var keyFile) &&
                 keyFile.ValueKind != System.Text.Json.JsonValueKind.Null)
@@ -63,7 +63,7 @@ public sealed partial class SettingsPage : Page
             settings["window_seconds"] = WindowSecondsBox.Value;
             settings["hop_seconds"] = HopSecondsBox.Value;
 
-            var result = await _api.PutSettingsAsync(settings);
+            var result = await Api.PutSettingsAsync(settings);
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
                 StatusText.Text = "Settings saved.";
             else if (result.TryGetProperty("error", out var err))

@@ -14,6 +14,7 @@ public sealed class BackendService
 
     public string BaseUrl { get; private set; } = "";
     public bool IsRunning => _process is { HasExited: false };
+    public event Action<int>? BackendExited;
 
     public async Task LaunchAsync(string? pythonPath = null, string? servePath = null)
     {
@@ -38,6 +39,8 @@ public sealed class BackendService
         if (_process is null)
             throw new InvalidOperationException("Failed to start backend process.");
 
+        _process.EnableRaisingEvents = true;
+        _process.Exited += (_, _) => BackendExited?.Invoke(_process?.ExitCode ?? -1);
         _process.OutputDataReceived += (_, e) => Debug.WriteLine($"[backend] {e.Data}");
         _process.ErrorDataReceived += (_, e) => Debug.WriteLine($"[backend:err] {e.Data}");
         _process.BeginOutputReadLine();
@@ -118,10 +121,9 @@ public sealed class BackendService
     {
         var candidates = new[]
         {
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "backend", "serve.py"),
             Path.Combine(AppContext.BaseDirectory, "backend", "serve.py"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "git", "groq-whisper", "backend", "serve.py"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "backend", "serve.py"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "backend", "serve.py"),
         };
 
         foreach (var path in candidates)
@@ -131,6 +133,7 @@ public sealed class BackendService
                 return full;
         }
 
-        return "serve.py";
+        throw new FileNotFoundException(
+            $"Backend serve.py not found. Searched: {string.Join(", ", candidates.Select(Path.GetFullPath))}");
     }
 }

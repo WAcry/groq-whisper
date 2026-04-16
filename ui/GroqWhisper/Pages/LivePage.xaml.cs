@@ -12,8 +12,8 @@ public sealed partial class LivePage : Page
         InitializeComponent();
         Loaded += async (_, _) =>
         {
-            if (!string.IsNullOrEmpty(App.Backend.BaseUrl))
-                ViewModel.UpdateApiBaseUrl(App.Backend.BaseUrl);
+            if (App.Api is not null)
+                ViewModel.SetApiClient(App.Api);
             await ViewModel.LoadModelFromSettingsAsync();
         };
     }

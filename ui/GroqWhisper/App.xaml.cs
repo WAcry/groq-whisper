@@ -6,6 +6,7 @@ namespace GroqWhisper;
 public partial class App : Application
 {
     public static BackendService Backend { get; } = new();
+    public static TranscriptionApiClient? Api { get; private set; }
     public static Window? MainWindowInstance { get; private set; }
 
     public App()
@@ -22,6 +23,7 @@ public partial class App : Application
         try
         {
             await Backend.LaunchAsync();
+            Api = new TranscriptionApiClient(Backend.BaseUrl);
         }
         catch (Exception ex)
         {
