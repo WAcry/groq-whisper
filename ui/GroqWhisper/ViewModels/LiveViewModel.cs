@@ -20,6 +20,7 @@ public partial class LiveViewModel : ObservableObject
     [ObservableProperty] private string _modelDisplay = "whisper-large-v3-turbo";
     [ObservableProperty] private string _durationDisplay = "00:00";
     [ObservableProperty] private int _tickCount;
+    [ObservableProperty] private string _tickCountDisplay = "0";
     [ObservableProperty] private string _errorMessage = "";
     [ObservableProperty] private Visibility _errorVisibility = Visibility.Collapsed;
     [ObservableProperty] private int _selectedModelIndex;
@@ -36,6 +37,11 @@ public partial class LiveViewModel : ObservableObject
     public void SetApiClient(TranscriptionApiClient api)
     {
         _api = api;
+    }
+
+    partial void OnTickCountChanged(int value)
+    {
+        TickCountDisplay = value.ToString();
     }
 
     private TranscriptionApiClient Api => _api ?? throw new InvalidOperationException("API client not set");
@@ -220,7 +226,8 @@ public partial class LiveViewModel : ObservableObject
     {
         try
         {
-            await foreach (var evt in _api.SubscribeEventsAsync(ct))
+            var api = _api ?? throw new InvalidOperationException("API client not set");
+            await foreach (var evt in api.SubscribeEventsAsync(ct))
             {
                 _dispatcher.TryEnqueue(() =>
                 {

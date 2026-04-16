@@ -111,9 +111,21 @@ public sealed class BackendService
 
     private static string FindPython()
     {
-        var embedded = Path.Combine(AppContext.BaseDirectory, "python", "python.exe");
-        if (File.Exists(embedded))
-            return embedded;
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "python", "python.exe"),
+            Path.Combine(AppContext.BaseDirectory, ".venv", "Scripts", "python.exe"),
+            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "..", ".venv", "Scripts", "python.exe"),
+            Path.Combine(Environment.CurrentDirectory, ".venv", "Scripts", "python.exe"),
+        };
+
+        foreach (var candidate in candidates)
+        {
+            var full = Path.GetFullPath(candidate);
+            if (File.Exists(full))
+                return full;
+        }
+
         return "python";
     }
 

@@ -3,8 +3,7 @@
     x:Class="GroqWhisper.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Groq Whisper"
-    Width="1200" Height="800">
+    Title="Groq Whisper">
 
     <Grid>
         <Grid.RowDefinitions>

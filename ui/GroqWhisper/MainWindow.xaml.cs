@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Graphics;
 using GroqWhisper.Pages;
 
 namespace GroqWhisper;
@@ -10,6 +11,7 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         ExtendsContentIntoTitleBar = true;
+        AppWindow.Resize(new SizeInt32(1200, 800));
         ContentFrame.Navigate(typeof(LivePage));
         NavView.SelectedItem = NavView.MenuItems[0];
     }
