@@ -51,14 +51,14 @@ public sealed partial class SettingsPage : Page
         {
             var settings = new Dictionary<string, object>();
 
-            if (!string.IsNullOrWhiteSpace(ApiKeyPathBox.Text))
-                settings["api_key_file"] = ApiKeyPathBox.Text;
+            settings["api_key_file"] = string.IsNullOrWhiteSpace(ApiKeyPathBox.Text)
+                ? null! : ApiKeyPathBox.Text;
 
             if (DefaultModelBox.SelectedItem is ComboBoxItem modelItem)
                 settings["model"] = modelItem.Tag?.ToString() ?? "whisper-large-v3-turbo";
 
-            if (!string.IsNullOrWhiteSpace(LanguageBox.Text))
-                settings["language"] = LanguageBox.Text;
+            settings["language"] = string.IsNullOrWhiteSpace(LanguageBox.Text)
+                ? null! : LanguageBox.Text;
 
             settings["window_seconds"] = WindowSecondsBox.Value;
             settings["hop_seconds"] = HopSecondsBox.Value;

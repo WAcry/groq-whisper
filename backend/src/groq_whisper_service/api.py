@@ -181,6 +181,17 @@ def create_app(
             return JSONResponse({"error": "Session not found"}, status_code=404)
         return JSONResponse(row)
 
+    @app.patch("/sessions/{session_id}")
+    async def patch_session(session_id: str, request: Request) -> JSONResponse:
+        body = await request.json()
+        row = session_store.get_session(session_id)
+        if row is None:
+            return JSONResponse({"error": "Session not found"}, status_code=404)
+        export_path = body.get("export_path")
+        if export_path is not None:
+            session_store.update_export_path(session_id, export_path)
+        return JSONResponse({"ok": True})
+
     @app.delete("/sessions/{session_id}")
     def delete_session(session_id: str) -> JSONResponse:
         deleted = session_store.delete_session(session_id)

@@ -98,6 +98,14 @@ public sealed class TranscriptionApiClient
         return response.IsSuccessStatusCode;
     }
 
+    public async Task PatchSessionExportPathAsync(string id, string exportPath)
+    {
+        var body = new Dictionary<string, string> { ["export_path"] = exportPath };
+        var content = new StringContent(
+            JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+        await _http.PatchAsync($"/sessions/{id}", content);
+    }
+
     public async IAsyncEnumerable<SseEvent> SubscribeEventsAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {

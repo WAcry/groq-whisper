@@ -434,6 +434,7 @@ class RealtimeTranscriptionService:
             self.capture = self.capture_factory(self.config)
             self.capture.start()
             self.started_at_monotonic = self.clock()
+            self.aggregator = self._build_aggregator()
         except Exception as exc:
             with self.state_lock:
                 self._state = ServiceState.error

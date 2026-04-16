@@ -29,6 +29,22 @@ public partial class LiveViewModel : ObservableObject
     public LiveViewModel()
     {
         _dispatcher = DispatcherQueue.GetForCurrentThread();
+        _ = LoadModelFromSettingsAsync();
+    }
+
+    private async Task LoadModelFromSettingsAsync()
+    {
+        try
+        {
+            var settings = await _api.GetSettingsAsync();
+            if (settings.TryGetProperty("model", out var model))
+            {
+                SelectedModelId = model.GetString() ?? "whisper-large-v3-turbo";
+                SelectedModelIndex = SelectedModelId == "whisper-large-v3" ? 1 : 0;
+                ModelDisplay = SelectedModelId;
+            }
+        }
+        catch { }
     }
 
     [RelayCommand]
@@ -118,6 +134,21 @@ public partial class LiveViewModel : ObservableObject
         if (file is not null)
         {
             await Windows.Storage.FileIO.WriteTextAsync(file, text);
+            try
+            {
+                var state = await _api.GetStateAsync();
+                if (state.TryGetProperty("latest_patch", out var patch) &&
+                    patch.ValueKind != System.Text.Json.JsonValueKind.Null)
+                {
+                    // Session ID is tracked server-side; we can get it from sessions list
+                    var sessions = await _api.GetSessionsAsync(limit: 1);
+                    if (sessions.Count > 0)
+                    {
+                        await _api.PatchSessionExportPathAsync(sessions[0].Id, file.Path);
+                    }
+                }
+            }
+            catch { }
         }
     }
 
