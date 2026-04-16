@@ -197,6 +197,17 @@ class StateTransitionTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["state"], "idle")
 
+    def test_stop_from_error_succeeds(self) -> None:
+        def bad_key_loader(_):
+            raise ValueError("bad key")
+
+        service = _make_service(api_key_loader=bad_key_loader)
+        service.start()
+        self.assertEqual(service._state, ServiceState.error)
+        result = service.stop()
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["state"], "idle")
+
     def test_pause_resume_cycle(self) -> None:
         service = _make_service()
         with mock.patch(

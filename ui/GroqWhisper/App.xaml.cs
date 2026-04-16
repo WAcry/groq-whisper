@@ -6,8 +6,7 @@ namespace GroqWhisper;
 public partial class App : Application
 {
     public static BackendService Backend { get; } = new();
-
-    private Window? _window;
+    public static Window? MainWindowInstance { get; private set; }
 
     public App()
     {
@@ -16,11 +15,25 @@ public partial class App : Application
 
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _window = new MainWindow();
-        _window.Closed += OnWindowClosed;
-        _window.Activate();
+        MainWindowInstance = new MainWindow();
+        MainWindowInstance.Closed += OnWindowClosed;
+        MainWindowInstance.Activate();
 
-        await Backend.LaunchAsync();
+        try
+        {
+            await Backend.LaunchAsync();
+        }
+        catch (Exception ex)
+        {
+            var dialog = new Microsoft.UI.Xaml.Controls.ContentDialog
+            {
+                Title = "Backend Error",
+                Content = $"Failed to start the backend service:\n{ex.Message}",
+                CloseButtonText = "OK",
+                XamlRoot = MainWindowInstance.Content.XamlRoot,
+            };
+            await dialog.ShowAsync();
+        }
     }
 
     private async void OnWindowClosed(object sender, WindowEventArgs args)

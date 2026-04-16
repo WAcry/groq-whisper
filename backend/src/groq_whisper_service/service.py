@@ -355,7 +355,7 @@ class RealtimeTranscriptionService:
 
     def stop(self) -> dict[str, Any]:
         with self.state_lock:
-            if self._state not in (ServiceState.running, ServiceState.paused):
+            if self._state not in (ServiceState.running, ServiceState.paused, ServiceState.error):
                 return {
                     "ok": False,
                     "state": self._state.value,
@@ -555,6 +555,9 @@ class RealtimeTranscriptionService:
             while not self.stop_event.is_set():
                 if self._paused.is_set():
                     self.stop_event.wait(0.5)
+                    if not self._paused.is_set() and not self.stop_event.is_set():
+                        elapsed = self.clock() - self.started_at_monotonic
+                        tick_index = max(tick_index, int(elapsed / self.config.hop_seconds))
                     continue
 
                 tick_end_monotonic = (

@@ -38,7 +38,7 @@
             <TextBlock VerticalAlignment="Center" FontSize="12"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                        Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
-                       Visibility="{x:Bind ViewModel.HasError, Mode=OneWay}" />
+                       Visibility="{x:Bind ViewModel.ErrorVisibility, Mode=OneWay}" />
         </StackPanel>
 
         <!-- Transcription Area -->

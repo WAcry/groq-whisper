@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
 using GroqWhisper.Models;
 using GroqWhisper.Services;
 
@@ -9,6 +10,7 @@ namespace GroqWhisper.ViewModels;
 public partial class LiveViewModel : ObservableObject
 {
     private readonly TranscriptionApiClient _api = new();
+    private readonly DispatcherQueue _dispatcher;
     private CancellationTokenSource? _eventCts;
 
     [ObservableProperty] private string _committedText = "";
@@ -18,11 +20,16 @@ public partial class LiveViewModel : ObservableObject
     [ObservableProperty] private string _durationDisplay = "00:00";
     [ObservableProperty] private int _tickCount;
     [ObservableProperty] private string _errorMessage = "";
-    [ObservableProperty] private bool _hasError;
+    [ObservableProperty] private Visibility _errorVisibility = Visibility.Collapsed;
     [ObservableProperty] private int _selectedModelIndex;
 
     private ServiceState _currentState = ServiceState.Idle;
     public string SelectedModelId { get; set; } = "whisper-large-v3-turbo";
+
+    public LiveViewModel()
+    {
+        _dispatcher = DispatcherQueue.GetForCurrentThread();
+    }
 
     [RelayCommand]
     private async Task StartAsync()
@@ -40,13 +47,13 @@ public partial class LiveViewModel : ObservableObject
             else if (result.TryGetProperty("error", out var err))
             {
                 ErrorMessage = err.GetString() ?? "Start failed";
-                HasError = true;
+                ErrorVisibility = Visibility.Visible;
             }
         }
         catch (Exception ex)
         {
             ErrorMessage = ex.Message;
-            HasError = true;
+            ErrorVisibility = Visibility.Visible;
         }
     }
 
@@ -62,7 +69,7 @@ public partial class LiveViewModel : ObservableObject
                 StateDisplay = "Paused";
             }
         }
-        catch (Exception ex) { ErrorMessage = ex.Message; HasError = true; }
+        catch (Exception ex) { ErrorMessage = ex.Message; ErrorVisibility = Visibility.Visible; }
     }
 
     [RelayCommand]
@@ -70,15 +77,17 @@ public partial class LiveViewModel : ObservableObject
     {
         try
         {
-            StopEventStream();
             var result = await _api.PostStopAsync();
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
             {
                 _currentState = ServiceState.Idle;
                 StateDisplay = "Idle";
             }
+            // Wait briefly for the final patch to arrive, then stop the stream
+            await Task.Delay(500);
+            StopEventStream();
         }
-        catch (Exception ex) { ErrorMessage = ex.Message; HasError = true; }
+        catch (Exception ex) { ErrorMessage = ex.Message; ErrorVisibility = Visibility.Visible; }
     }
 
     [RelayCommand]
@@ -101,6 +110,9 @@ public partial class LiveViewModel : ObservableObject
         picker.SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary;
         picker.FileTypeChoices.Add("Text", [".txt"]);
         picker.SuggestedFileName = $"transcription_{DateTime.Now:yyyyMMdd_HHmmss}";
+
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindowInstance);
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
 
         var file = await picker.PickSaveFileAsync();
         if (file is not null)
@@ -129,46 +141,52 @@ public partial class LiveViewModel : ObservableObject
         {
             await foreach (var evt in _api.SubscribeEventsAsync(ct))
             {
-                switch (evt.EventType)
+                _dispatcher.TryEnqueue(() =>
                 {
-                    case "transcription.patch":
-                    case "transcription.final":
-                        var patch = evt.Deserialize<TranscriptionPatch>();
-                        if (patch is not null)
-                        {
-                            CommittedText = patch.CommittedText;
-                            TailText = string.IsNullOrEmpty(patch.TailText) ? "" : " " + patch.TailText;
-                            TickCount = patch.TickIndex;
-                            var seconds = (int)patch.WindowEndS;
-                            DurationDisplay = $"{seconds / 60:D2}:{seconds % 60:D2}";
-                        }
-                        break;
+                    switch (evt.EventType)
+                    {
+                        case "transcription.patch":
+                        case "transcription.final":
+                            var patch = evt.Deserialize<TranscriptionPatch>();
+                            if (patch is not null)
+                            {
+                                CommittedText = patch.CommittedText;
+                                TailText = string.IsNullOrEmpty(patch.TailText) ? "" : " " + patch.TailText;
+                                TickCount = patch.TickIndex;
+                                var seconds = (int)patch.WindowEndS;
+                                DurationDisplay = $"{seconds / 60:D2}:{seconds % 60:D2}";
+                            }
+                            break;
 
-                    case "service.error":
-                        var error = evt.Deserialize<Dictionary<string, string>>();
-                        ErrorMessage = error?.GetValueOrDefault("message") ?? "Unknown error";
-                        HasError = true;
-                        _currentState = ServiceState.Error;
-                        StateDisplay = "Error";
-                        break;
+                        case "service.error":
+                            var error = evt.Deserialize<Dictionary<string, string>>();
+                            ErrorMessage = error?.GetValueOrDefault("message") ?? "Unknown error";
+                            ErrorVisibility = Visibility.Visible;
+                            _currentState = ServiceState.Error;
+                            StateDisplay = "Error";
+                            break;
 
-                    case "service.paused":
-                        _currentState = ServiceState.Paused;
-                        StateDisplay = "Paused";
-                        break;
+                        case "service.paused":
+                            _currentState = ServiceState.Paused;
+                            StateDisplay = "Paused";
+                            break;
 
-                    case "service.resumed":
-                        _currentState = ServiceState.Running;
-                        StateDisplay = "Running";
-                        break;
-                }
+                        case "service.resumed":
+                            _currentState = ServiceState.Running;
+                            StateDisplay = "Running";
+                            break;
+                    }
+                });
             }
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            ErrorMessage = $"Event stream error: {ex.Message}";
-            HasError = true;
+            _dispatcher.TryEnqueue(() =>
+            {
+                ErrorMessage = $"Event stream error: {ex.Message}";
+                ErrorVisibility = Visibility.Visible;
+            });
         }
     }
 }
