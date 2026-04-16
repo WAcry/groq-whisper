@@ -1,27 +1,32 @@
 using System.Diagnostics;
+using System.Net;
+using System.Net.Sockets;
 
 namespace GroqWhisper.Services;
 
 public sealed class BackendService
 {
-    private const string DefaultBaseUrl = "http://127.0.0.1:8000";
     private const int HealthCheckIntervalMs = 500;
     private const int HealthCheckTimeoutMs = 15_000;
 
     private Process? _process;
-    private readonly HttpClient _http = new() { BaseAddress = new Uri(DefaultBaseUrl) };
+    private HttpClient? _http;
 
+    public string BaseUrl { get; private set; } = "";
     public bool IsRunning => _process is { HasExited: false };
 
     public async Task LaunchAsync(string? pythonPath = null, string? servePath = null)
     {
         var python = pythonPath ?? "python";
         var serve = servePath ?? FindServePath();
+        var port = FindFreePort();
+        BaseUrl = $"http://127.0.0.1:{port}";
+        _http = new HttpClient { BaseAddress = new Uri(BaseUrl) };
 
         var startInfo = new ProcessStartInfo
         {
             FileName = python,
-            Arguments = $"\"{serve}\"",
+            Arguments = $"\"{serve}\" --host 127.0.0.1 --port {port}",
             WorkingDirectory = Path.GetDirectoryName(serve) ?? ".",
             UseShellExecute = false,
             CreateNoWindow = true,
@@ -51,9 +56,12 @@ public sealed class BackendService
 
     public async Task WaitForReadyAsync(TimeSpan timeout)
     {
+        if (_http is null) throw new InvalidOperationException("Backend not launched");
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
+            if (_process is { HasExited: true })
+                throw new InvalidOperationException($"Backend process exited with code {_process.ExitCode}");
             try
             {
                 var response = await _http.GetAsync("/healthz");
@@ -76,7 +84,8 @@ public sealed class BackendService
 
         try
         {
-            await _http.PostAsync("/stop", null);
+            if (_http is not null)
+                await _http.PostAsync("/stop", null);
         }
         catch { }
 
@@ -94,6 +103,15 @@ public sealed class BackendService
             _process?.Dispose();
             _process = null;
         }
+    }
+
+    private static int FindFreePort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        return port;
     }
 
     private static string FindServePath()

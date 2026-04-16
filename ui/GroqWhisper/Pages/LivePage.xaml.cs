@@ -10,7 +10,12 @@ public sealed partial class LivePage : Page
     public LivePage()
     {
         InitializeComponent();
-        Loaded += async (_, _) => await ViewModel.LoadModelFromSettingsAsync();
+        Loaded += async (_, _) =>
+        {
+            if (!string.IsNullOrEmpty(App.Backend.BaseUrl))
+                ViewModel.UpdateApiBaseUrl(App.Backend.BaseUrl);
+            await ViewModel.LoadModelFromSettingsAsync();
+        };
     }
 
     private void ModelSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)

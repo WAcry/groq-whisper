@@ -9,7 +9,7 @@ namespace GroqWhisper.ViewModels;
 
 public partial class LiveViewModel : ObservableObject
 {
-    private readonly TranscriptionApiClient _api = new();
+    private TranscriptionApiClient _api = new();
     private readonly DispatcherQueue _dispatcher;
     private CancellationTokenSource? _eventCts;
 
@@ -30,6 +30,11 @@ public partial class LiveViewModel : ObservableObject
     public LiveViewModel()
     {
         _dispatcher = DispatcherQueue.GetForCurrentThread();
+    }
+
+    public void UpdateApiBaseUrl(string baseUrl)
+    {
+        _api = new TranscriptionApiClient(baseUrl);
     }
 
     public async Task LoadModelFromSettingsAsync()
@@ -92,6 +97,23 @@ public partial class LiveViewModel : ObservableObject
             {
                 _currentState = ServiceState.Paused;
                 StateDisplay = "Paused";
+            }
+        }
+        catch (Exception ex) { ErrorMessage = ex.Message; ErrorVisibility = Visibility.Visible; }
+    }
+
+    [RelayCommand]
+    private async Task ResumeAsync()
+    {
+        try
+        {
+            var result = await _api.PostResumeAsync();
+            if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
+            {
+                _currentState = ServiceState.Running;
+                StateDisplay = "Running";
+                if (result.TryGetProperty("session_id", out var sid))
+                    _currentSessionId = sid.GetString();
             }
         }
         catch (Exception ex) { ErrorMessage = ex.Message; ErrorVisibility = Visibility.Visible; }
@@ -207,6 +229,9 @@ public partial class LiveViewModel : ObservableObject
                         case "service.resumed":
                             _currentState = ServiceState.Running;
                             StateDisplay = "Running";
+                            var resumed = evt.Deserialize<Dictionary<string, string>>();
+                            if (resumed?.TryGetValue("session_id", out var newSid) == true)
+                                _currentSessionId = newSid;
                             break;
                     }
                 });

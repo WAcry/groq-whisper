@@ -25,19 +25,20 @@ public partial class App : Application
         }
         catch (Exception ex)
         {
+            if (MainWindowInstance?.Content?.XamlRoot is not { } xamlRoot) return;
             var dialog = new Microsoft.UI.Xaml.Controls.ContentDialog
             {
                 Title = "Backend Error",
                 Content = $"Failed to start the backend service:\n{ex.Message}",
                 CloseButtonText = "OK",
-                XamlRoot = MainWindowInstance.Content.XamlRoot,
+                XamlRoot = xamlRoot,
             };
             await dialog.ShowAsync();
         }
     }
 
-    private async void OnWindowClosed(object sender, WindowEventArgs args)
+    private void OnWindowClosed(object sender, WindowEventArgs args)
     {
-        await Backend.ShutdownAsync();
+        Task.Run(() => Backend.ShutdownAsync()).GetAwaiter().GetResult();
     }
 }

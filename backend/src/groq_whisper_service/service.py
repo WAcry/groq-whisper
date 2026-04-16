@@ -285,6 +285,7 @@ class RealtimeTranscriptionService:
                     "error": "Previous worker thread is still alive",
                 }
             self._state = ServiceState.preflight
+            self._capture_stopped.clear()
 
         preflight = self._preflight()
         self._preflight_results = preflight
@@ -419,6 +420,7 @@ class RealtimeTranscriptionService:
                     "state": self._state.value,
                     "error": f"Cannot pause from state '{self._state.value}'",
                 }
+            self._capture_stopped.clear()
             self._paused.set()
             self._state = ServiceState.paused
         self._publish({"type": "service.paused"})
@@ -432,7 +434,12 @@ class RealtimeTranscriptionService:
                     "state": self._state.value,
                     "error": f"Cannot resume from state '{self._state.value}'",
                 }
-        self._capture_stopped.wait(timeout=5.0)
+        if not self._capture_stopped.wait(timeout=5.0):
+            return {
+                "ok": False,
+                "state": ServiceState.paused.value,
+                "error": "Capture teardown still in progress",
+            }
         self._capture_stopped.clear()
         self._finalize_dangling_session()
         try:
@@ -461,8 +468,12 @@ class RealtimeTranscriptionService:
         with self.state_lock:
             self._paused.clear()
             self._state = ServiceState.running
-        self._publish({"type": "service.resumed"})
-        return {"ok": True, "state": ServiceState.running.value}
+        self._publish({"type": "service.resumed", "session_id": self._current_session_id})
+        return {
+            "ok": True,
+            "state": ServiceState.running.value,
+            "session_id": self._current_session_id,
+        }
 
     def snapshot(self) -> dict[str, Any]:
         with self.state_lock:

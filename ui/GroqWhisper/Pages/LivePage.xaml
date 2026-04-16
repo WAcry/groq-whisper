@@ -69,6 +69,8 @@
                           Command="{x:Bind ViewModel.StartCommand}" />
             <AppBarButton Label="Pause" Icon="Pause"
                           Command="{x:Bind ViewModel.PauseCommand}" />
+            <AppBarButton Label="Resume" Icon="Play"
+                          Command="{x:Bind ViewModel.ResumeCommand}" />
             <AppBarButton Label="Stop" Icon="Stop"
                           Command="{x:Bind ViewModel.StopCommand}" />
             <AppBarSeparator />
