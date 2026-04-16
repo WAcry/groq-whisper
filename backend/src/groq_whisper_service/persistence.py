@@ -37,6 +37,21 @@ class SessionStore:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
+
+    def _migrate(self) -> None:
+        existing = {
+            row[1]
+            for row in self._conn.execute("PRAGMA table_info(sessions)").fetchall()
+        }
+        migrations = [
+            ("tick_count", "INTEGER NOT NULL DEFAULT 0"),
+            ("export_path", "TEXT"),
+        ]
+        for col_name, col_def in migrations:
+            if col_name not in existing:
+                self._conn.execute(f"ALTER TABLE sessions ADD COLUMN {col_name} {col_def}")
+        self._conn.commit()
 
     def close(self) -> None:
         with self._lock:

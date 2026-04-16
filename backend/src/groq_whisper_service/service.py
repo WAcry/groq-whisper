@@ -180,6 +180,7 @@ class RealtimeTranscriptionService:
         self.subscribers_lock = threading.Lock()
         self.stop_event = threading.Event()
         self._paused = threading.Event()
+        self._capture_stopped = threading.Event()
         self.worker_thread: threading.Thread | None = None
         self.capture: AudioCaptureLike | None = None
         self.client: Any = None
@@ -351,7 +352,11 @@ class RealtimeTranscriptionService:
                 "commit_lag_seconds": self.config.commit_lag_seconds,
             }
         )
-        return {"ok": True, "state": ServiceState.running.value}
+        return {
+            "ok": True,
+            "state": ServiceState.running.value,
+            "session_id": self._current_session_id,
+        }
 
     def stop(self) -> dict[str, Any]:
         with self.state_lock:
@@ -427,6 +432,8 @@ class RealtimeTranscriptionService:
                     "state": self._state.value,
                     "error": f"Cannot resume from state '{self._state.value}'",
                 }
+        self._capture_stopped.wait(timeout=5.0)
+        self._capture_stopped.clear()
         self._finalize_dangling_session()
         try:
             self.capture = self.capture_factory(self.config)
@@ -467,6 +474,7 @@ class RealtimeTranscriptionService:
                 "latest_patch": self.latest_patch_payload,
                 "preflight_results": self._preflight_results,
                 "model": self.config.model,
+                "session_id": self._current_session_id,
             }
 
     def health(self) -> dict[str, Any]:
@@ -585,6 +593,7 @@ class RealtimeTranscriptionService:
                     if self.capture is not None:
                         self.capture.stop()
                         self.capture = None
+                    self._capture_stopped.set()
                     self.stop_event.wait(0.5)
                     if not self._paused.is_set() and not self.stop_event.is_set():
                         tick_index = 1

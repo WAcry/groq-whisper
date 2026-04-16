@@ -24,6 +24,7 @@ public partial class LiveViewModel : ObservableObject
     [ObservableProperty] private int _selectedModelIndex;
 
     private ServiceState _currentState = ServiceState.Idle;
+    private string? _currentSessionId;
     public string SelectedModelId { get; set; } = "whisper-large-v3-turbo";
 
     public LiveViewModel()
@@ -33,17 +34,24 @@ public partial class LiveViewModel : ObservableObject
 
     public async Task LoadModelFromSettingsAsync()
     {
-        try
+        for (int attempt = 0; attempt < 5; attempt++)
         {
-            var settings = await _api.GetSettingsAsync();
-            if (settings.TryGetProperty("model", out var model))
+            try
             {
-                SelectedModelId = model.GetString() ?? "whisper-large-v3-turbo";
-                SelectedModelIndex = SelectedModelId == "whisper-large-v3" ? 1 : 0;
-                ModelDisplay = SelectedModelId;
+                var settings = await _api.GetSettingsAsync();
+                if (settings.TryGetProperty("model", out var model))
+                {
+                    SelectedModelId = model.GetString() ?? "whisper-large-v3-turbo";
+                    SelectedModelIndex = SelectedModelId == "whisper-large-v3" ? 1 : 0;
+                    ModelDisplay = SelectedModelId;
+                }
+                return;
+            }
+            catch
+            {
+                await Task.Delay(1000);
             }
         }
-        catch { }
     }
 
     [RelayCommand]
@@ -57,6 +65,8 @@ public partial class LiveViewModel : ObservableObject
                 _currentState = ServiceState.Running;
                 StateDisplay = "Running";
                 ModelDisplay = SelectedModelId;
+                if (result.TryGetProperty("session_id", out var sid))
+                    _currentSessionId = sid.GetString();
                 StartEventStream();
             }
             else if (result.TryGetProperty("error", out var err))
@@ -133,21 +143,14 @@ public partial class LiveViewModel : ObservableObject
         if (file is not null)
         {
             await Windows.Storage.FileIO.WriteTextAsync(file, text);
-            try
+            if (_currentSessionId is not null)
             {
-                var state = await _api.GetStateAsync();
-                if (state.TryGetProperty("latest_patch", out var patch) &&
-                    patch.ValueKind != System.Text.Json.JsonValueKind.Null)
+                try
                 {
-                    // Session ID is tracked server-side; we can get it from sessions list
-                    var sessions = await _api.GetSessionsAsync(limit: 1);
-                    if (sessions.Count > 0)
-                    {
-                        await _api.PatchSessionExportPathAsync(sessions[0].Id, file.Path);
-                    }
+                    await _api.PatchSessionExportPathAsync(_currentSessionId, file.Path);
                 }
+                catch { }
             }
-            catch { }
         }
     }
 
