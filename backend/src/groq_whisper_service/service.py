@@ -381,7 +381,11 @@ class RealtimeTranscriptionService:
         if worker is not None and worker.is_alive():
             worker.join(timeout=15.0)
             if worker.is_alive():
+                self._safe_stop_capture(signal_paused=False)
+                self.worker_thread = None
+                self.client = None
                 with self.state_lock:
+                    self.running = False
                     self._state = ServiceState.error
                     self.last_error = "Worker thread did not stop within timeout"
                 return {

@@ -155,6 +155,32 @@ def _make_service(**overrides):
 
 
 class StateTransitionTests(unittest.TestCase):
+    def test_stop_timeout_clears_client_and_capture(self) -> None:
+        class StuckWorker:
+            def join(self, timeout=None) -> None:
+                return None
+
+            def is_alive(self) -> bool:
+                return True
+
+        client = object()
+        capture = FakeCapture(RealtimeTranscriptionServiceConfig())
+        service = _make_service(client_factory=lambda _: client)
+        service.client = client
+        service.capture = capture
+        service.worker_thread = StuckWorker()
+        service.running = True
+        service._state = ServiceState.running
+
+        result = service.stop()
+
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["state"], "error")
+        self.assertEqual(result["error"], "Worker thread did not stop within timeout")
+        self.assertIsNone(service.client)
+        self.assertIsNone(service.capture)
+        self.assertTrue(capture.stopped)
+
     def test_initial_state_is_idle(self) -> None:
         service = _make_service()
         self.assertEqual(service._state, ServiceState.idle)

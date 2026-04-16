@@ -94,4 +94,4 @@ python -m groq_whisper_service --host 127.0.0.1 --port 8000
 ## 说明
 
 - `transcribe.py` 仍然保留为离线 rolling CLI 入口，便于复用原 demo 的测试和调试路径。It now requires `GROQ_API_KEY`; `--key-file` is no longer supported.
-- 当前实现是单会话、启动即开始采集和转写。
+- 当前实现是单会话，需显式调用 `POST /start` 开始采集和转写。

@@ -170,7 +170,7 @@ public sealed partial class SettingsPage : Page
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
         var storedKeyUpdated = false;
-        var shouldClearEditorFields = false;
+        var shouldClearEditorFields = true;
         try
         {
             if (!await EnsureCanMutateSettingsAsync("Stop the active transcription session before saving settings."))
@@ -180,7 +180,6 @@ public sealed partial class SettingsPage : Page
 
             var settings = new Dictionary<string, object>();
             var keyDraft = GetKeyDraft();
-            shouldClearEditorFields = true;
             if (!string.IsNullOrWhiteSpace(keyDraft))
             {
                 SecretStore.SaveGroqApiKey(keyDraft);
