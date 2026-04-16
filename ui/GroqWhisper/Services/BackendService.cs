@@ -18,8 +18,9 @@ public sealed class BackendService
 
     public async Task LaunchAsync(string? pythonPath = null, string? servePath = null)
     {
-        var python = pythonPath ?? "python";
+        var python = pythonPath ?? FindPython();
         var serve = servePath ?? FindServePath();
+        await VerifyPythonDependenciesAsync(python);
         var port = FindFreePort();
         BaseUrl = $"http://127.0.0.1:{port}";
         _http = new HttpClient { BaseAddress = new Uri(BaseUrl) };
@@ -105,6 +106,45 @@ public sealed class BackendService
         {
             _process?.Dispose();
             _process = null;
+        }
+    }
+
+    private static string FindPython()
+    {
+        var embedded = Path.Combine(AppContext.BaseDirectory, "python", "python.exe");
+        if (File.Exists(embedded))
+            return embedded;
+        return "python";
+    }
+
+    private static async Task VerifyPythonDependenciesAsync(string python)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = python,
+                Arguments = "-c \"import fastapi, uvicorn, numpy\"",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true,
+            };
+            var proc = Process.Start(psi);
+            if (proc is null)
+                throw new InvalidOperationException($"Could not start Python at '{python}'");
+            await proc.WaitForExitAsync();
+            if (proc.ExitCode != 0)
+            {
+                var stderr = await proc.StandardError.ReadToEndAsync();
+                throw new InvalidOperationException(
+                    $"Python dependency check failed (exit {proc.ExitCode}): {stderr.Trim()}");
+            }
+        }
+        catch (System.ComponentModel.Win32Exception ex)
+        {
+            throw new FileNotFoundException(
+                $"Python not found at '{python}'. Install Python 3.11+ or place an embedded runtime in the 'python' directory.",
+                ex);
         }
     }
 

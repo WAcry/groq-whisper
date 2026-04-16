@@ -15,6 +15,7 @@ public partial class LiveViewModel : ObservableObject
 
     [ObservableProperty] private string _committedText = "";
     [ObservableProperty] private string _tailText = "";
+    [ObservableProperty] private string _displayText = "";
     [ObservableProperty] private string _stateDisplay = "Idle";
     [ObservableProperty] private string _modelDisplay = "whisper-large-v3-turbo";
     [ObservableProperty] private string _durationDisplay = "00:00";
@@ -142,7 +143,7 @@ public partial class LiveViewModel : ObservableObject
     [RelayCommand]
     private void Copy()
     {
-        var text = CommittedText + TailText;
+        var text = DisplayText;
         if (string.IsNullOrEmpty(text)) return;
         var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
         package.SetText(text);
@@ -152,7 +153,7 @@ public partial class LiveViewModel : ObservableObject
     [RelayCommand]
     private async Task ExportAsync()
     {
-        var text = CommittedText + TailText;
+        var text = DisplayText;
         if (string.IsNullOrEmpty(text)) return;
 
         var picker = new Windows.Storage.Pickers.FileSavePicker();
@@ -217,7 +218,10 @@ public partial class LiveViewModel : ObservableObject
                             if (patch is not null)
                             {
                                 CommittedText = patch.CommittedText;
-                                TailText = string.IsNullOrEmpty(patch.TailText) ? "" : " " + patch.TailText;
+                                DisplayText = patch.DisplayText;
+                                TailText = patch.DisplayText.Length > patch.CommittedText.Length
+                                    ? patch.DisplayText[patch.CommittedText.Length..]
+                                    : "";
                                 TickCount = patch.TickIndex;
                                 var seconds = (int)patch.WindowEndS;
                                 DurationDisplay = $"{seconds / 60:D2}:{seconds % 60:D2}";
