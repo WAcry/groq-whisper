@@ -5,7 +5,7 @@
 - `groq-whisper-algo-demo` 里的 rolling stable-prefix 聚合算法
 - `mic-speaker-mixer` 里的 Windows 麦克风 + 扬声器 loopback 混音采集
 
-目标是启动服务后，持续采集 Windows 上的混合音频，并且每 5 秒向 Groq Whisper 发送最近 30 秒窗口，随后流式输出转录 patch 事件。
+目标是启动服务后，通过显式 `POST /start` 控制持续采集 Windows 上的混合音频，并且每 5 秒向 Groq Whisper 发送最近 30 秒窗口，随后流式输出转录 patch 事件。
 
 ## 当前实现边界
 
@@ -39,11 +39,13 @@
 pip install -e .
 ```
 
-设置 API Key：
+设置 CLI / backend shell 的 API Key：
 
 ```powershell
 $env:GROQ_API_KEY = "your-groq-api-key"
 ```
+
+WinUI product flow no longer reads a plaintext key file. The desktop app stores the key in Windows user-scoped secure storage from the Settings page and sends it to the backend only in `POST /start`.
 
 ## 启动服务
 
@@ -64,6 +66,14 @@ python -m groq_whisper_service --host 127.0.0.1 --port 8000
 - `GET /healthz`
 - `GET /state`
 - `GET /events`
+- `GET /settings`
+- `PUT /settings`
+- `POST /start`
+- `POST /stop`
+- `POST /pause`
+- `POST /resume`
+- `GET /devices`
+- `GET /sessions`
 
 `/events` 返回 SSE，事件类型包括：
 
@@ -83,5 +93,5 @@ python -m groq_whisper_service --host 127.0.0.1 --port 8000
 
 ## 说明
 
-- `transcribe.py` 仍然保留为离线 rolling CLI 入口，便于复用原 demo 的测试和调试路径。
-- 当前实现是单会话、启动即开始采集和转写。
+- `transcribe.py` 仍然保留为离线 rolling CLI 入口，便于复用原 demo 的测试和调试路径。It now requires `GROQ_API_KEY`; `--key-file` is no longer supported.
+- 当前实现是单会话，需显式调用 `POST /start` 开始采集和转写。

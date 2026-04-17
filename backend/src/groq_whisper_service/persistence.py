@@ -148,7 +148,7 @@ class SessionStore:
             rows = self._conn.execute(
                 "SELECT id, started_at, ended_at, model, language, duration_seconds, tick_count, "
                 "substr(full_text, 1, 200) AS text_preview "
-                "FROM sessions ORDER BY started_at DESC LIMIT ? OFFSET ?",
+                "FROM sessions ORDER BY started_at DESC, rowid DESC LIMIT ? OFFSET ?",
                 (limit, offset),
             ).fetchall()
         return [dict(row) for row in rows]

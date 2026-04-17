@@ -20,21 +20,30 @@
                 <TextBlock Text="{x:Bind ViewModel.StateDisplay, Mode=OneWay}"
                            FontSize="12" />
             </Border>
-            <TextBlock VerticalAlignment="Center" FontSize="12"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                <Run Text="Model:" />
-                <Run Text="{x:Bind ViewModel.ModelDisplay, Mode=OneWay}" FontWeight="SemiBold" />
-            </TextBlock>
-            <TextBlock VerticalAlignment="Center" FontSize="12"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                <Run Text="Duration:" />
-                <Run Text="{x:Bind ViewModel.DurationDisplay, Mode=OneWay}" FontWeight="SemiBold" />
-            </TextBlock>
-            <TextBlock VerticalAlignment="Center" FontSize="12"
-                       Foreground="{ThemeResource TextFillColorSecondaryBrush}">
-                <Run Text="Ticks:" />
-                <Run Text="{x:Bind ViewModel.TickCount, Mode=OneWay}" FontWeight="SemiBold" />
-            </TextBlock>
+            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <TextBlock FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="Model:" />
+                <TextBlock FontSize="12"
+                           FontWeight="SemiBold"
+                           Text="{x:Bind ViewModel.ModelDisplay, Mode=OneWay}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <TextBlock FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="Duration:" />
+                <TextBlock FontSize="12"
+                           FontWeight="SemiBold"
+                           Text="{x:Bind ViewModel.DurationDisplay, Mode=OneWay}" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <TextBlock FontSize="12"
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           Text="Ticks:" />
+                <TextBlock FontSize="12"
+                           FontWeight="SemiBold"
+                           Text="{x:Bind ViewModel.TickCountDisplay, Mode=OneWay}" />
+            </StackPanel>
             <TextBlock VerticalAlignment="Center" FontSize="12"
                        Foreground="{ThemeResource TextFillColorTertiaryBrush}"
                        Text="{x:Bind ViewModel.ErrorMessage, Mode=OneWay}"
@@ -42,37 +51,54 @@
         </StackPanel>
 
         <!-- Transcription Area -->
-        <ScrollViewer Grid.Row="1"
-                      VerticalScrollBarVisibility="Auto"
-                      Background="{ThemeResource LayerFillColorDefaultBrush}"
-                      CornerRadius="8"
-                      Padding="16">
-            <RichTextBlock x:Name="TranscriptionBlock"
-                           FontSize="16"
-                           LineHeight="28"
-                           TextWrapping="Wrap"
-                           IsTextSelectionEnabled="True">
-                <Paragraph>
-                    <Run x:Name="CommittedRun"
-                         Foreground="{ThemeResource TextFillColorPrimaryBrush}"
-                         Text="{x:Bind ViewModel.CommittedText, Mode=OneWay}" />
-                    <Run x:Name="TailRun"
-                         Foreground="{ThemeResource TextFillColorTertiaryBrush}"
-                         Text="{x:Bind ViewModel.TailText, Mode=OneWay}" />
-                </Paragraph>
-            </RichTextBlock>
-        </ScrollViewer>
+        <Border Grid.Row="1"
+                CornerRadius="8"
+                Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto"
+                          Padding="16">
+                <RichTextBlock x:Name="TranscriptionBlock"
+                               FontSize="16"
+                               LineHeight="28"
+                               TextWrapping="Wrap"
+                               IsTextSelectionEnabled="True">
+                    <Paragraph>
+                        <Run x:Name="CommittedRun"
+                             Foreground="{ThemeResource TextFillColorPrimaryBrush}"
+                             Text="{x:Bind ViewModel.CommittedText, Mode=OneWay}" />
+                        <Run x:Name="TailRun"
+                             Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                             Text="{x:Bind ViewModel.TailText, Mode=OneWay}" />
+                    </Paragraph>
+                </RichTextBlock>
+            </ScrollViewer>
+        </Border>
 
         <!-- Control Bar -->
         <CommandBar Grid.Row="2" DefaultLabelPosition="Right">
-            <AppBarButton Label="Start" Icon="Play"
-                          Command="{x:Bind ViewModel.StartCommand}" />
-            <AppBarButton Label="Pause" Icon="Pause"
-                          Command="{x:Bind ViewModel.PauseCommand}" />
-            <AppBarButton Label="Resume" Icon="Play"
-                          Command="{x:Bind ViewModel.ResumeCommand}" />
-            <AppBarButton Label="Stop" Icon="Stop"
-                          Command="{x:Bind ViewModel.StopCommand}" />
+            <AppBarButton Label="Start"
+                          Command="{x:Bind ViewModel.StartCommand}">
+                <AppBarButton.Icon>
+                    <SymbolIcon Symbol="Play" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton Label="Pause"
+                          Command="{x:Bind ViewModel.PauseCommand}">
+                <AppBarButton.Icon>
+                    <SymbolIcon Symbol="Pause" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton Label="Resume"
+                          Command="{x:Bind ViewModel.ResumeCommand}">
+                <AppBarButton.Icon>
+                    <SymbolIcon Symbol="Play" />
+                </AppBarButton.Icon>
+            </AppBarButton>
+            <AppBarButton Label="Stop"
+                          Command="{x:Bind ViewModel.StopCommand}">
+                <AppBarButton.Icon>
+                    <SymbolIcon Symbol="Stop" />
+                </AppBarButton.Icon>
+            </AppBarButton>
             <AppBarSeparator />
             <AppBarElementContainer>
                 <ComboBox x:Name="ModelSelector"
@@ -84,10 +110,18 @@
                 </ComboBox>
             </AppBarElementContainer>
             <CommandBar.SecondaryCommands>
-                <AppBarButton Label="Copy" Icon="Copy"
-                              Command="{x:Bind ViewModel.CopyCommand}" />
-                <AppBarButton Label="Export" Icon="Save"
-                              Command="{x:Bind ViewModel.ExportCommand}" />
+                <AppBarButton Label="Copy"
+                              Command="{x:Bind ViewModel.CopyCommand}">
+                    <AppBarButton.Icon>
+                        <SymbolIcon Symbol="Copy" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
+                <AppBarButton Label="Export"
+                              Command="{x:Bind ViewModel.ExportCommand}">
+                    <AppBarButton.Icon>
+                        <SymbolIcon Symbol="Save" />
+                    </AppBarButton.Icon>
+                </AppBarButton>
             </CommandBar.SecondaryCommands>
         </CommandBar>
     </Grid>

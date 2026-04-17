@@ -27,23 +27,11 @@ ROLLING_CONFIG_FLAGS = {
 }
 
 
-def load_api_key(default_key_path: Path | None) -> str:
+def load_api_key() -> str:
     env_key = os.environ.get("GROQ_API_KEY", "").strip()
     if env_key:
         return env_key
-
-    if default_key_path is None:
-        raise RuntimeError(
-            "Missing API key. Set GROQ_API_KEY or pass --key-file explicitly."
-        )
-
-    try:
-        file_key = default_key_path.read_text(encoding="utf-8").strip()
-    except FileNotFoundError as exc:
-        raise RuntimeError(f"API key file not found: {default_key_path}") from exc
-    if not file_key:
-        raise RuntimeError(f"API key file is empty: {default_key_path}")
-    return file_key
+    raise RuntimeError("Missing API key. Set GROQ_API_KEY before running the CLI.")
 
 
 def field(item: object, name: str) -> Any:
@@ -71,11 +59,6 @@ def parse_args() -> argparse.Namespace:
         nargs="?",
         default=str(repo_dir / "tests" / "fixtures" / "30s.flac"),
         help="Path to the audio file.",
-    )
-    parser.add_argument(
-        "--key-file",
-        default=None,
-        help="Path to the API key file used when GROQ_API_KEY is not set.",
     )
     parser.add_argument(
         "--prompt",
@@ -610,8 +593,7 @@ def main() -> None:
     audio_path = Path(args.audio).resolve()
     if not audio_path.exists():
         raise RuntimeError(f"Audio file not found: {audio_path}")
-    key_path = Path(args.key_file).resolve() if args.key_file else None
-    client = create_client(load_api_key(key_path))
+    client = create_client(load_api_key())
     if args.rolling:
         run_rolling(args, client)
         return

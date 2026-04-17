@@ -111,9 +111,17 @@ public sealed class BackendService
 
     private static string FindPython()
     {
-        var embedded = Path.Combine(AppContext.BaseDirectory, "python", "python.exe");
-        if (File.Exists(embedded))
-            return embedded;
+        foreach (var root in EnumerateSearchRoots())
+        {
+            var embedded = Path.Combine(root, "python", "python.exe");
+            if (File.Exists(embedded))
+                return embedded;
+
+            var venv = Path.Combine(root, ".venv", "Scripts", "python.exe");
+            if (File.Exists(venv))
+                return venv;
+        }
+
         return "python";
     }
 
@@ -159,21 +167,41 @@ public sealed class BackendService
 
     private static string FindServePath()
     {
-        var candidates = new[]
+        foreach (var root in EnumerateSearchRoots())
         {
-            Path.Combine(AppContext.BaseDirectory, "backend", "serve.py"),
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "backend", "serve.py"),
-            Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "backend", "serve.py"),
-        };
-
-        foreach (var path in candidates)
-        {
-            var full = Path.GetFullPath(path);
-            if (File.Exists(full))
-                return full;
+            var candidate = Path.Combine(root, "backend", "serve.py");
+            if (File.Exists(candidate))
+                return candidate;
         }
 
+        var searched = EnumerateSearchRoots()
+            .Select(root => Path.Combine(root, "backend", "serve.py"));
+
         throw new FileNotFoundException(
-            $"Backend serve.py not found. Searched: {string.Join(", ", candidates.Select(Path.GetFullPath))}");
+            $"Backend serve.py not found. Searched: {string.Join(", ", searched)}");
+    }
+
+    private static IEnumerable<string> EnumerateSearchRoots()
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var starts = new[]
+        {
+            AppContext.BaseDirectory,
+            Environment.CurrentDirectory,
+        };
+
+        foreach (var start in starts)
+        {
+            if (string.IsNullOrWhiteSpace(start))
+                continue;
+
+            for (var current = new DirectoryInfo(Path.GetFullPath(start));
+                 current is not null;
+                 current = current.Parent)
+            {
+                if (seen.Add(current.FullName))
+                    yield return current.FullName;
+            }
+        }
     }
 }

@@ -216,9 +216,19 @@ def localize_words(
 
 
 class StablePrefixTests(unittest.TestCase):
-    def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
+    def run_cli(
+        self,
+        *args: str,
+        env_overrides: dict[str, str | None] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
         env = os.environ.copy()
         env.pop("GROQ_API_KEY", None)
+        if env_overrides:
+            for key, value in env_overrides.items():
+                if value is None:
+                    env.pop(key, None)
+                else:
+                    env[key] = value
         return subprocess.run(
             [sys.executable, str(TRANSCRIBE_PATH), *args],
             cwd=ROOT_DIR,
@@ -1636,6 +1646,7 @@ class StablePrefixTests(unittest.TestCase):
         result = self.run_cli("--help")
         self.assertEqual(result.returncode, 0)
         self.assertIn("usage: transcribe.py", result.stdout)
+        self.assertNotIn("--key-file", result.stdout)
         self.assertEqual(result.stderr, "")
 
     def test_cli_missing_key_reports_clear_error(self) -> None:
@@ -1644,15 +1655,11 @@ class StablePrefixTests(unittest.TestCase):
         self.assertIn("Missing API key", result.stderr)
         self.assertNotIn("playground/groq_api_key", result.stderr)
 
-    def test_cli_missing_explicit_key_file_reports_given_path(self) -> None:
-        result = self.run_cli(str(FIXTURE_AUDIO_PATH), "--key-file", "/tmp/test-groq-key")
-        self.assertEqual(result.returncode, 1)
-        missing_key_path = Path("/tmp/test-groq-key").resolve()
-        self.assertIn(f"API key file not found: {missing_key_path}", result.stderr)
-        self.assertNotIn("playground/groq_api_key", result.stderr)
-
     def test_cli_missing_audio_reports_clear_error(self) -> None:
-        result = self.run_cli("/tmp/does-not-exist.flac", "--key-file", "/tmp/test-groq-key")
+        result = self.run_cli(
+            "/tmp/does-not-exist.flac",
+            env_overrides={"GROQ_API_KEY": "test-key"},
+        )
         self.assertEqual(result.returncode, 1)
         missing_audio_path = Path("/tmp/does-not-exist.flac").resolve()
         self.assertIn(f"Audio file not found: {missing_audio_path}", result.stderr)

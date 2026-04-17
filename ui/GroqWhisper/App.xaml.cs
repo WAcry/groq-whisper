@@ -1,5 +1,6 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using GroqWhisper.Core;
 using GroqWhisper.Services;
 
 namespace GroqWhisper;
@@ -8,6 +9,17 @@ public partial class App : Application
 {
     public static BackendService Backend { get; } = new();
     public static TranscriptionApiClient? Api { get; set; }
+    public static WindowsSecretStore SecretStore { get; } = new();
+    public static BackendStateCoordinator BackendState { get; } = new(
+        async cancellationToken =>
+        {
+            if (Api is null)
+                return "disconnected";
+            var state = await Api.GetStateAsync(cancellationToken);
+            return state.TryGetProperty("state", out var value)
+                ? value.GetString() ?? "unknown"
+                : "unknown";
+        });
     public static Window? MainWindowInstance { get; private set; }
     public static event Action? BackendDisconnected;
 
@@ -22,6 +34,7 @@ public partial class App : Application
         {
             await Backend.LaunchAsync();
             Api = new TranscriptionApiClient(Backend.BaseUrl);
+            await BackendState.RefreshAsync();
         }
         catch (Exception ex)
         {
@@ -55,6 +68,7 @@ public partial class App : Application
         dispatcher?.TryEnqueue(() =>
         {
             Api = null;
+            BackendState.OnBackendDisconnected();
             BackendDisconnected?.Invoke();
         });
     }
