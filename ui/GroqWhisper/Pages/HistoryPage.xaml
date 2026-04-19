@@ -16,32 +16,43 @@
             <TextBlock Text="Session History"
                        Style="{StaticResource SubtitleTextBlockStyle}" />
             <Button Content="Refresh" Click="Refresh_Click" />
+            <Button Content="{x:Bind ViewModel.DeleteSelectedLabel, Mode=OneWay}"
+                    IsEnabled="{x:Bind ViewModel.CanDeleteSelected, Mode=OneWay}"
+                    Click="DeleteSelected_Click" />
         </StackPanel>
 
         <ListView Grid.Row="1"
                   x:Name="SessionList"
                   ItemsSource="{x:Bind ViewModel.Sessions, Mode=OneWay}"
-                  SelectionMode="Single"
-                  SelectionChanged="SessionList_SelectionChanged">
+                  SelectionMode="None">
             <ListView.ItemTemplate>
                 <DataTemplate x:DataType="models:Session">
                     <Grid Padding="8" ColumnSpacing="16">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="{x:Bind StartedAt}"
+                        <CheckBox Grid.Column="0"
+                                  IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                                  VerticalAlignment="Center"
+                                  Click="SelectionCheckBox_Click" />
+                        <TextBlock Grid.Column="1" Text="{x:Bind StartedAt}"
                                    FontSize="12"
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        <TextBlock Grid.Column="1" Text="{x:Bind TextPreview}"
+                        <TextBlock Grid.Column="2" Text="{x:Bind TextPreview}"
                                    TextTrimming="CharacterEllipsis"
                                    MaxLines="1" />
-                        <TextBlock Grid.Column="2" Text="{x:Bind Model}"
+                        <TextBlock Grid.Column="3" Text="{x:Bind Model}"
                                    FontSize="12"
                                    Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
-                        <Button Grid.Column="3" Content="Delete"
+                        <Button Grid.Column="4" Content="View"
+                                Tag="{x:Bind Id}"
+                                Click="View_Click" />
+                        <Button Grid.Column="5" Content="Delete"
                                 Tag="{x:Bind Id}"
                                 Click="Delete_Click" />
                     </Grid>

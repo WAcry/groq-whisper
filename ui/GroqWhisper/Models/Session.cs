@@ -1,9 +1,12 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace GroqWhisper.Models;
 
-public sealed class Session
+public sealed class Session : ObservableObject
 {
+    private bool _isSelected;
+
     [JsonPropertyName("id")]
     public string Id { get; set; } = "";
 
@@ -36,4 +39,11 @@ public sealed class Session
 
     [JsonPropertyName("export_path")]
     public string? ExportPath { get; set; }
+
+    [JsonIgnore]
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => SetProperty(ref _isSelected, value);
+    }
 }

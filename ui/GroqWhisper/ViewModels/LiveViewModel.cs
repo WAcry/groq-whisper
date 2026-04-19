@@ -26,6 +26,8 @@ public partial class LiveViewModel : ObservableObject
     [ObservableProperty] private string _errorMessage = "";
     [ObservableProperty] private Visibility _errorVisibility = Visibility.Collapsed;
     [ObservableProperty] private int _selectedModelIndex;
+    [ObservableProperty] private bool _canStart = true;
+    [ObservableProperty] private bool _canStop;
 
     private ServiceState _currentState = ServiceState.Idle;
     private string? _currentSessionId;
@@ -91,8 +93,7 @@ public partial class LiveViewModel : ObservableObject
             var result = await Api.PostStartAsync(model: SelectedModelId, apiKey: apiKey);
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
             {
-                _currentState = ServiceState.Running;
-                StateDisplay = "Running";
+                UpdateState(ServiceState.Running, "Running");
                 ModelDisplay = SelectedModelId;
                 _backendState?.OnStartSucceeded();
                 if (result.TryGetProperty("session_id", out var sid))
@@ -113,50 +114,6 @@ public partial class LiveViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task PauseAsync()
-    {
-        try
-        {
-            var result = await Api.PostPauseAsync();
-            if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
-            {
-                _currentState = ServiceState.Paused;
-                StateDisplay = "Paused";
-                _backendState?.OnPauseSucceeded();
-            }
-            else if (result.TryGetProperty("error", out var err))
-            {
-                ErrorMessage = err.GetString() ?? "Pause failed";
-                ErrorVisibility = Visibility.Visible;
-            }
-        }
-        catch (Exception ex) { ErrorMessage = ex.Message; ErrorVisibility = Visibility.Visible; }
-    }
-
-    [RelayCommand]
-    private async Task ResumeAsync()
-    {
-        try
-        {
-            var result = await Api.PostResumeAsync();
-            if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
-            {
-                _currentState = ServiceState.Running;
-                StateDisplay = "Running";
-                _backendState?.OnResumeSucceeded();
-                if (result.TryGetProperty("session_id", out var sid))
-                    _currentSessionId = sid.GetString();
-            }
-            else if (result.TryGetProperty("error", out var err))
-            {
-                ErrorMessage = err.GetString() ?? "Resume failed";
-                ErrorVisibility = Visibility.Visible;
-            }
-        }
-        catch (Exception ex) { ErrorMessage = ex.Message; ErrorVisibility = Visibility.Visible; }
-    }
-
-    [RelayCommand]
     private async Task StopAsync()
     {
         try
@@ -164,8 +121,7 @@ public partial class LiveViewModel : ObservableObject
             var result = await Api.PostStopAsync();
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
             {
-                _currentState = ServiceState.Idle;
-                StateDisplay = "Idle";
+                UpdateState(ServiceState.Idle, "Idle");
                 _backendState?.OnStopSucceeded();
             }
             else if (result.TryGetProperty("error", out var err))
@@ -177,8 +133,7 @@ public partial class LiveViewModel : ObservableObject
                     var state = ServiceStateExtensions.Parse(stateValue.GetString());
                     if (state == ServiceState.Error)
                     {
-                        _currentState = ServiceState.Error;
-                        StateDisplay = "Error";
+                        UpdateState(ServiceState.Error, "Error");
                         _backendState?.OnError();
                     }
                 }
@@ -245,8 +200,7 @@ public partial class LiveViewModel : ObservableObject
     public void HandleBackendDisconnected()
     {
         StopEventStream();
-        _currentState = ServiceState.Error;
-        StateDisplay = "Backend Disconnected";
+        UpdateState(ServiceState.Error, "Backend Disconnected");
         _backendState?.OnBackendDisconnected();
         ErrorMessage = "Backend process exited unexpectedly";
         ErrorVisibility = Visibility.Visible;
@@ -283,20 +237,17 @@ public partial class LiveViewModel : ObservableObject
                             var error = evt.Deserialize<Dictionary<string, string>>();
                             ErrorMessage = error?.GetValueOrDefault("message") ?? "Unknown error";
                             ErrorVisibility = Visibility.Visible;
-                            _currentState = ServiceState.Error;
-                            StateDisplay = "Error";
+                            UpdateState(ServiceState.Error, "Error");
                             _backendState?.OnError();
                             break;
 
                         case "service.paused":
-                            _currentState = ServiceState.Paused;
-                            StateDisplay = "Paused";
+                            UpdateState(ServiceState.Paused, "Paused");
                             _backendState?.OnPauseSucceeded();
                             break;
 
                         case "service.resumed":
-                            _currentState = ServiceState.Running;
-                            StateDisplay = "Running";
+                            UpdateState(ServiceState.Running, "Running");
                             _backendState?.OnResumeSucceeded();
                             var resumed = evt.Deserialize<Dictionary<string, string>>();
                             if (resumed?.TryGetValue("session_id", out var newSid) == true)
@@ -312,8 +263,7 @@ public partial class LiveViewModel : ObservableObject
                 {
                     ErrorMessage = "Backend connection lost";
                     ErrorVisibility = Visibility.Visible;
-                    _currentState = ServiceState.Error;
-                    StateDisplay = "Disconnected";
+                    UpdateState(ServiceState.Error, "Disconnected");
                     _backendState?.OnBackendDisconnected();
                 });
             }
@@ -325,10 +275,17 @@ public partial class LiveViewModel : ObservableObject
             {
                 ErrorMessage = $"Event stream error: {ex.Message}";
                 ErrorVisibility = Visibility.Visible;
-                _currentState = ServiceState.Error;
-                StateDisplay = "Disconnected";
+                UpdateState(ServiceState.Error, "Disconnected");
                 _backendState?.OnBackendDisconnected();
             });
         }
+    }
+
+    private void UpdateState(ServiceState state, string display)
+    {
+        _currentState = state;
+        StateDisplay = display;
+        CanStart = state is ServiceState.Idle or ServiceState.Error or ServiceState.Unknown;
+        CanStop = state is ServiceState.Running or ServiceState.Paused or ServiceState.Error;
     }
 }

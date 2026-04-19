@@ -76,25 +76,15 @@
         <!-- Control Bar -->
         <CommandBar Grid.Row="2" DefaultLabelPosition="Right">
             <AppBarButton Label="Start"
-                          Command="{x:Bind ViewModel.StartCommand}">
-                <AppBarButton.Icon>
-                    <SymbolIcon Symbol="Play" />
-                </AppBarButton.Icon>
-            </AppBarButton>
-            <AppBarButton Label="Pause"
-                          Command="{x:Bind ViewModel.PauseCommand}">
-                <AppBarButton.Icon>
-                    <SymbolIcon Symbol="Pause" />
-                </AppBarButton.Icon>
-            </AppBarButton>
-            <AppBarButton Label="Resume"
-                          Command="{x:Bind ViewModel.ResumeCommand}">
+                          Command="{x:Bind ViewModel.StartCommand}"
+                          IsEnabled="{x:Bind ViewModel.CanStart, Mode=OneWay}">
                 <AppBarButton.Icon>
                     <SymbolIcon Symbol="Play" />
                 </AppBarButton.Icon>
             </AppBarButton>
             <AppBarButton Label="Stop"
-                          Command="{x:Bind ViewModel.StopCommand}">
+                          Command="{x:Bind ViewModel.StopCommand}"
+                          IsEnabled="{x:Bind ViewModel.CanStop, Mode=OneWay}">
                 <AppBarButton.Icon>
                     <SymbolIcon Symbol="Stop" />
                 </AppBarButton.Icon>
