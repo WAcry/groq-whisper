@@ -116,6 +116,8 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T02:46:58-07:00) Fixed the Milestone 4 round-1 findings by aligning Milestone 4, verification, and acceptance wording around a launch-level smoke boundary plus follow-up manual QA, by adding `backend/tests/test_client_pool.py` to the official automated verification commands, by terminating the smoke-launched `GroqWhisper.exe` and backend `serve.py` processes, and by rerunning `dotnet build ui\GroqWhisper.sln -p:Platform=x64` successfully after cleanup to confirm the worktree returned to a repeatable build state.
 - [x] (2026-04-19T02:51:49-07:00) Ran Milestone 4 review round 2 against the full diff from `96038d6` to `2e6d1b4` and captured two remaining important documentation-consistency issues: Milestone 1 and 2 still implied richer user-visible verification had already happened, and the final architecture map still described several pre-migration single-key responsibilities instead of the actual multi-key implementation files.
 - [x] (2026-04-19T02:51:49-07:00) Fixed the Milestone 4 round-2 findings by making Milestone 1 and 2 explicitly automated-verification milestones with follow-up manual QA called out separately, by rewriting the final `Context and Orientation` and `Interfaces and Dependencies` sections to match the implemented multi-key architecture, and by keeping Milestone 4's sign-off boundary aligned with the same manual-QA split.
+- [x] (2026-04-19T02:55:36-07:00) Ran Milestone 4 review round 3 against the full diff from `96038d6` to `137bedf` and captured one last important documentation issue: the bottom `Interfaces and Dependencies` section still pointed readers at `rolling_transcriber.py` as the multi-key routing layer and omitted the new Core helpers and direct pool tests that actually define the delivered architecture.
+- [x] (2026-04-19T02:55:36-07:00) Fixed the Milestone 4 round-3 finding by aligning the bottom `Interfaces and Dependencies` list with the final multi-key implementation, including `TranscriptionStartPreparation`, `TranscriptionStartRequest`, `client_pool.py`, and `test_client_pool.py`, while keeping `rolling_transcriber.py` explicitly documented as the preserved CLI single-key path. Per user instruction, the review loop stops here after three rounds because no P0 issue remains.
 
 ## Surprises & Discoveries
 
@@ -455,12 +457,17 @@ Base HEAD at planning time: 6866da25d03afa6b3b55b7fb2b8e0f60cd64b7bf
 
 ## Interfaces and Dependencies
 
-- `ui/GroqWhisper.Core/WindowsSecretStore.cs`: local encrypted persistence boundary for user secrets.
-- `ui/GroqWhisper/Pages/SettingsPage.xaml(.cs)`: WinUI settings editor and status messaging for stored keys and backend settings.
-- `ui/GroqWhisper/ViewModels/LiveViewModel.cs`: entry point that loads stored keys and starts sessions.
-- `ui/GroqWhisper/Services/TranscriptionApiClient.cs`: HTTP client for backend API calls; owns the start-request JSON shape.
-- `backend/src/groq_whisper_service/api.py`: FastAPI layer validating JSON request bodies.
-- `backend/src/groq_whisper_service/service.py`: backend state machine and long-running session orchestration.
-- `backend/src/groq_whisper_service/rolling_transcriber.py`: Groq SDK client creation and request execution surface; this is the right layer for round-robin routing and bounded failover.
+- `ui/GroqWhisper.Core/WindowsSecretStore.cs`: local encrypted persistence boundary for the versioned multi-key secret envelope.
+- `ui/GroqWhisper/Pages/SettingsPage.xaml(.cs)`: WinUI settings editor for entering one API key per line, revealing stored keys, clearing them, and reporting stored-key counts.
+- `ui/GroqWhisper.Core/TranscriptionStartPreparation.cs`: pure helper that loads stored API keys and assembles the validated start request used by the Live page.
+- `ui/GroqWhisper.Core/TranscriptionStartRequest.cs`: serializable DTO for the backend `api_keys` start contract.
+- `ui/GroqWhisper/ViewModels/LiveViewModel.cs`: Live-page entry point that delegates request preparation and starts/stops sessions through the API client.
+- `ui/GroqWhisper/Services/TranscriptionApiClient.cs`: HTTP client for backend API calls; submits the typed `api_keys` start-request JSON body.
+- `ui/GroqWhisper.Tests/WindowsSecretStoreTests.cs`, `TranscriptionStartPreparationTests.cs`, and `TranscriptionStartRequestTests.cs`: .NET coverage for local secret normalization/recovery, start-request preparation, and payload serialization.
+- `backend/src/groq_whisper_service/api.py`: FastAPI layer validating `api_keys` start bodies and rejecting secret fields in `/settings`.
+- `backend/src/groq_whisper_service/service.py`: backend state machine that normalizes `api_keys` once per start, runs preflight, creates the pool-backed client surface, and drives rolling transcription requests.
+- `backend/src/groq_whisper_service/client_pool.py`: multi-key round-robin and one-step failover helper built around one Groq client per normalized key.
+- `backend/src/groq_whisper_service/rolling_transcriber.py`: CLI-oriented Groq SDK integration and request construction layer that intentionally remains single-key in this iteration.
+- `backend/tests/test_service.py`, `backend/tests/test_client_pool.py`, and `backend/tests/test_stable_prefix.py`: Python coverage for the service contract, pool behavior, and the preserved CLI-facing path.
 - Groq Python SDK (`groq` package): upstream transcription client library used by the backend.
 - DPAPI via `DpapiSecretProtector`: Windows-only encryption mechanism already used for local secret storage.
