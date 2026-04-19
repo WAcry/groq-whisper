@@ -89,7 +89,7 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T01:25:01-07:00) Folded the second review findings back into the ExecPlan by requiring a versioned secret envelope, defining no-distinct-target retry behavior, and tightening `/settings` and verification requirements.
 - [x] (2026-04-19T01:30:51-07:00) Ran a third full `$exec-agent-review` pass and captured the last important issues around empty-editor Save semantics and explicit normalization coverage.
 - [x] (2026-04-19T01:30:51-07:00) Folded the third review findings back into the ExecPlan by turning empty-editor Save into a single explicit rule and by making normalization and terminology consistency part of planned verification.
-- [ ] Run a final fresh full plan review with `$exec-agent-review` after the latest fixes above. This exceeds the nominal three-round target because important review issues were still being found; the extra pass is to close the planning phase without unresolved non-minor items.
+- [x] (2026-04-19T01:32:46-07:00) Stopped the attempted fourth review round after the user clarified that only P0 issues may exceed three review rounds. This plan therefore exits the review loop after three rounds, with the last fixes accepted by user instruction rather than a fourth reviewer pass.
 - [ ] Stop after the planning phase unless the user explicitly asks to execute the plan.
 
 ## Surprises & Discoveries
@@ -175,6 +175,10 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - Decision: User-visible and service-visible paths touched by this feature use plural terminology (`API keys`, `api_keys`) consistently, while unchanged CLI-only single-key paths may retain singular naming as an explicit exception.
   Rationale: The contract is moving from one secret to many, and the plan should not permit a half-migrated mix of singular and plural terminology across the app and service.
   Date/Author: 2026-04-19 / Codex
+
+- Decision: The planning review loop is capped at three rounds unless a P0 issue remains.
+  Rationale: The user explicitly clarified that important or minor findings do not justify a fourth review round.
+  Date/Author: 2026-04-19 / Codex + user
 
 ## Outcomes & Retrospective
 
