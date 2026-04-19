@@ -45,6 +45,7 @@ public partial class LiveViewModel : ObservableObject
     {
         _backendState = coordinator;
     }
+
     partial void OnTickCountChanged(int value)
     {
         TickCountDisplay = value.ToString();
