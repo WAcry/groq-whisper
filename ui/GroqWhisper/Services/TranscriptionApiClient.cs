@@ -22,11 +22,15 @@ public sealed class TranscriptionApiClient
         string? prompt = null,
         IEnumerable<string>? apiKeys = null)
     {
-        var request = TranscriptionStartRequest.Create(
+        return await PostStartAsync(TranscriptionStartRequest.Create(
             model: model,
             language: language,
             prompt: prompt,
-            apiKeys: apiKeys);
+            apiKeys: apiKeys));
+    }
+
+    public async Task<JsonElement> PostStartAsync(TranscriptionStartRequest request)
+    {
         var content = new StringContent(
             JsonSerializer.Serialize(request),
             Encoding.UTF8,
