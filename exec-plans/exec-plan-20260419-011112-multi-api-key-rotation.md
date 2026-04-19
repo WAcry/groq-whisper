@@ -87,7 +87,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T01:17:39-07:00) Write and polish the ExecPlan document.
 - [x] (2026-04-19T01:25:01-07:00) Ran a second full `$exec-agent-review` pass and captured remaining issues around self-describing secret format, single/distinct-key failover semantics, `/settings` rejection coverage for `api_keys`, and verification wording.
 - [x] (2026-04-19T01:25:01-07:00) Folded the second review findings back into the ExecPlan by requiring a versioned secret envelope, defining no-distinct-target retry behavior, and tightening `/settings` and verification requirements.
-- [ ] Run a fresh full plan review with `$exec-agent-review` after the latest fixes above.
+- [x] (2026-04-19T01:30:51-07:00) Ran a third full `$exec-agent-review` pass and captured the last important issues around empty-editor Save semantics and explicit normalization coverage.
+- [x] (2026-04-19T01:30:51-07:00) Folded the third review findings back into the ExecPlan by turning empty-editor Save into a single explicit rule and by making normalization and terminology consistency part of planned verification.
+- [ ] Run a final fresh full plan review with `$exec-agent-review` after the latest fixes above. This exceeds the nominal three-round target because important review issues were still being found; the extra pass is to close the planning phase without unresolved non-minor items.
 - [ ] Stop after the planning phase unless the user explicitly asks to execute the plan.
 
 ## Surprises & Discoveries
@@ -158,8 +160,8 @@ After this work, the Settings page will let the user manage multiple Groq API ke
   Rationale: “Retry on the next key” should mean failover to a different credential, not duplicate submission against the same key.
   Date/Author: 2026-04-19 / Codex
 
-- Decision: Saving Settings with an empty multi-line key editor will not clear the stored secrets. Clearing remains an explicit `Clear` action; Save with no keys should report a validation error or leave secrets unchanged.
-  Rationale: This is the safest UX with the current page shape because the page already has a dedicated destructive clear control.
+- Decision: Saving Settings with an empty multi-line key editor never changes the stored keys. It still saves non-secret backend settings, then shows a status message that keys were left unchanged and that `Clear` is the only removal path.
+  Rationale: This removes implementation ambiguity while preserving the existing dedicated destructive clear control.
   Date/Author: 2026-04-19 / Codex
 
 - Decision: Frontend payload-shape automation will be added through a small pure request body helper or DTO in `ui/GroqWhisper.Core`, so `ui/GroqWhisper.Tests` can verify `api_keys` serialization without taking a dependency on the WinUI app assembly.
@@ -168,6 +170,10 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 - Decision: The CLI path in `rolling_transcriber.py` remains single-key and environment-driven for this milestone; multi-key pooling is a session-start concern for the Windows app/backend service path.
   Rationale: The user-facing feature request is about the desktop app’s stored keys and live service session. Preserving the CLI’s one-key contract reduces unrelated surface-area change while the routing helper is introduced for service use.
+  Date/Author: 2026-04-19 / Codex
+
+- Decision: User-visible and service-visible paths touched by this feature use plural terminology (`API keys`, `api_keys`) consistently, while unchanged CLI-only single-key paths may retain singular naming as an explicit exception.
+  Rationale: The contract is moving from one secret to many, and the plan should not permit a half-migrated mix of singular and plural terminology across the app and service.
   Date/Author: 2026-04-19 / Codex
 
 ## Outcomes & Retrospective
@@ -197,7 +203,7 @@ The key architectural constraint is that the Windows app owns user secrets and o
 
 ### Milestone 1: Multi-key storage and editing in the Windows app
 
-After this milestone, the user can paste multiple keys into Settings, save them locally, clear them, and reveal them back into the editor. The UI clearly indicates that one key is expected per line and how many keys are currently stored. Verification is via `WindowsSecretStore` unit tests plus a manual Settings page walkthrough. Completion requires the old single-key editor code paths to be removed or updated so the UI and storage semantics are internally consistent, requires an explicit unsupported-old-format message for legacy single-key local payloads, and requires the new persisted plaintext to use a versioned envelope that can distinguish a new one-key save from the old raw-string payload.
+After this milestone, the user can paste multiple keys into Settings, save them locally, clear them, and reveal them back into the editor. The UI clearly indicates that one key is expected per line and how many keys are currently stored. Verification is via `WindowsSecretStore` unit tests plus a manual Settings page walkthrough. Completion requires the old single-key editor code paths to be removed or updated so the UI and storage semantics are internally consistent, requires an explicit unsupported-old-format message for legacy single-key local payloads, requires the new persisted plaintext to use a versioned envelope that can distinguish a new one-key save from the old raw-string payload, and requires the empty-editor Save path to leave stored keys unchanged while still permitting non-secret settings to be saved.
 
 ### Milestone 2: Frontend-to-backend contract moves to `api_keys`
 
@@ -213,17 +219,17 @@ After this milestone, both the .NET and Python test suites covering the changed 
 
 ## Work Plan
 
-Begin in `ui/GroqWhisper.Core/WindowsSecretStore.cs` by changing the serialized secret payload from a single plaintext string to a structured list format suitable for multiple keys. The new plaintext must use a self-describing versioned envelope, not a newline-joined raw string. The storage layer must normalize whitespace, drop blank lines, remove exact duplicates while preserving first-seen order, reject empty final payloads, and continue using the existing DPAPI protector abstraction. Because the user explicitly chose a direct incompatible cut, the load path should detect old single-string payloads and surface a clear “re-enter and save keys in the new format” error instead of auto-upgrading them. Update `ui/GroqWhisper.Tests/WindowsSecretStoreTests.cs` to verify multi-key round-trip, overwrite behavior, empty-input rejection, unsupported-old-format behavior, acceptance of a valid new-format single-key payload, and decryption failure handling.
+Begin in `ui/GroqWhisper.Core/WindowsSecretStore.cs` by changing the serialized secret payload from a single plaintext string to a structured list format suitable for multiple keys. The new plaintext must use a self-describing versioned envelope, not a newline-joined raw string. The storage layer must normalize whitespace, drop blank lines, remove exact duplicates while preserving first-seen order, reject empty final payloads, and continue using the existing DPAPI protector abstraction. Because the user explicitly chose a direct incompatible cut, the load path should detect old single-string payloads and surface a clear “re-enter and save keys in the new format” error instead of auto-upgrading them. Update `ui/GroqWhisper.Tests/WindowsSecretStoreTests.cs` to verify multi-key round-trip, overwrite behavior, empty-input rejection, unsupported-old-format behavior, acceptance of a valid new-format single-key payload, and normalization examples such as `\"  A  \", \"\", \"A\", \"B\" -> [\"A\", \"B\"]`, along with decryption failure handling.
 
-Next, refactor the Settings page in `ui/GroqWhisper/Pages/SettingsPage.xaml(.cs)` from a single-key password-style editor to a multi-line key editor. Preserve the current operational pattern where saved keys are not automatically revealed into the form on page load; “Reveal” should explicitly load the stored keys into the editor, and “Hide” should clear the in-memory editor contents. Update the status strings to talk about key counts instead of one stored key, and make the empty-editor Save behavior non-destructive: only `Clear` removes stored keys.
+Next, refactor the Settings page in `ui/GroqWhisper/Pages/SettingsPage.xaml(.cs)` from a single-key password-style editor to a multi-line key editor. Preserve the current operational pattern where saved keys are not automatically revealed into the form on page load; “Reveal” should explicitly load the stored keys into the editor, and “Hide” should clear the in-memory editor contents. Update the status strings to talk about key counts instead of one stored key, make the empty-editor Save behavior non-destructive, and make that rule explicit in the status text: Save with no keys leaves stored keys untouched while still allowing non-secret settings to be applied; only `Clear` removes stored keys.
 
 Then, add frontend contract coverage and update the Live transport path together. Extract the start request body shape into a small pure helper or DTO under `ui/GroqWhisper.Core` so `ui/GroqWhisper.Tests` can assert the emitted JSON uses `api_keys`. After that, update `ui/GroqWhisper/ViewModels/LiveViewModel.cs` to load the full key list and pass it to `ui/GroqWhisper/Services/TranscriptionApiClient.cs`, whose `PostStartAsync` method should emit `api_keys` as a JSON array. Ensure the missing-key error shown to the user refers to the absence of stored keys rather than a singular key.
 
-On the backend side, change `backend/src/groq_whisper_service/api.py` and `backend/src/groq_whisper_service/service.py` so `/start` and `RealtimeTranscriptionService.start()` accept a non-empty key list. Keep the invariant that `/settings` refuses secret material, including the new `api_keys` field, and ensure `GET /settings` never returns it. The service should validate and normalize the list once per start call, then pass it into pooled-client creation.
+On the backend side, change `backend/src/groq_whisper_service/api.py` and `backend/src/groq_whisper_service/service.py` so `/start` and `RealtimeTranscriptionService.start()` accept a non-empty key list. Keep the invariant that `/settings` refuses secret material, including the new `api_keys` field, and ensure `GET /settings` never returns it. The service should validate and normalize the list once per start call, then pass the normalized list into pooled-client creation. The backend-side tests must assert normalization explicitly, not only downstream round-robin behavior after normalization has already occurred.
 
 Implement the actual rotation in `backend/src/groq_whisper_service/rolling_transcriber.py` or a new small helper module adjacent to it, but keep the CLI-oriented `load_api_key()` and `run_once()` / `run_rolling()` path single-key and environment-driven. The service-side design should be a thin wrapper around one Groq client per key that exposes the same `client.audio.transcriptions.create(...)` surface the rest of the code already expects. That wrapper should hold a lock-protected round-robin index, advance the global cursor past the successful retry key, and be the only place that decides which underlying key is used for each request. Add a targeted retry policy there: for retry-eligible upstream exceptions, try exactly one more distinct key before failing; if no distinct key exists after normalization, surface the original retry-eligible failure without same-key retry. Keep error classification explicit and conservative; if the SDK exception shape is ambiguous, inspect the real exception attributes and document the chosen predicate in the Decision Log during implementation.
 
-Finally, update backend tests in `backend/tests/test_service.py` and `backend/tests/test_stable_prefix.py` or add an equivalent direct routing-helper test module so the modified `rolling_transcriber.py` surface is covered from both the service path and its existing module consumers. Those tests must explicitly cover `/settings` rejecting `api_keys`, successful failover to the next distinct key, and the single-distinct-key no-retry case. Rebuild the desktop app and re-run the changed test suites from the worktree.
+Finally, update backend tests in `backend/tests/test_service.py` and `backend/tests/test_stable_prefix.py` or add an equivalent direct routing-helper test module so the modified `rolling_transcriber.py` surface is covered from both the service path and its existing module consumers. Those tests must explicitly cover `/settings` rejecting `api_keys`, successful failover to the next distinct key, the single-distinct-key no-retry case, and normalization examples such as `[\"  A  \", \"\", \"A\", \"B\"] -> [\"A\", \"B\"]`. Rebuild the desktop app and re-run the changed test suites from the worktree.
 
 ## Detailed Steps
 
@@ -296,9 +302,14 @@ Acceptance criteria:
 - The direct-cut behavior for old local single-key payloads is explicit and actionable.
 - The frontend and backend agree on the `api_keys` array start contract.
 - `/settings` continues rejecting all secret fields, including `api_keys`, and never returns them.
+- Save with an empty key editor does not remove stored keys and communicates that `Clear` is the only removal path.
+- Normalization behavior for whitespace, blank lines, duplicates, and ordering is explicitly covered by tests at both the local-storage and backend-start boundaries.
 - Runtime request selection is deterministic and covered by tests.
 - Retry-on-next-key behavior is covered by tests and does not spin indefinitely.
 - Secrets remain excluded from `/settings` payloads and continue to be stored only on the Windows side.
+
+Consistency requirement:
+- User-visible and service-visible strings, fields, and tests touched by this feature should use plural terminology (`API keys`, `api_keys`) consistently. Unchanged CLI-only code may retain singular naming only where the plan explicitly preserves the single-key path.
 
 ## Artifacts and Notes
 
