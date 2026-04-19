@@ -116,6 +116,29 @@ public sealed class WindowsSecretStoreTests : IDisposable
         Assert.Contains("could not be decrypted", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void LoadWrapsFileAccessErrors()
+    {
+        var store = new WindowsSecretStore(_tempDirectory, new PassthroughSecretProtector());
+        Directory.CreateDirectory(_tempDirectory);
+        var secretPath = Path.Combine(_tempDirectory, "groq-api-key.dat");
+        File.WriteAllBytes(
+            secretPath,
+            Encoding.UTF8.GetBytes("""
+                {"Version":1,"ApiKeys":["locked-key"]}
+                """));
+
+        using var lockedStream = new FileStream(
+            secretPath,
+            FileMode.Open,
+            FileAccess.ReadWrite,
+            FileShare.None);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => store.LoadGroqApiKeys());
+
+        Assert.Contains("could not be read", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     public void Dispose()
     {
         if (Directory.Exists(_tempDirectory))

@@ -48,6 +48,18 @@ public sealed class WindowsSecretStore
                 "Stored API keys could not be decrypted. Clear them and enter the keys again.",
                 ex);
         }
+        catch (IOException ex)
+        {
+            throw new InvalidOperationException(
+                "Stored API keys could not be read. Close any app using the secret file and try again.",
+                ex);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            throw new InvalidOperationException(
+                "Stored API keys could not be read. Close any app using the secret file and try again.",
+                ex);
+        }
     }
 
     public string? LoadGroqApiKey()

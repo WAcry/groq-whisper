@@ -35,7 +35,8 @@
                             Click="ClearKey_Click" />
                 </StackPanel>
                 <TextBlock x:Name="KeyStateText"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           TextWrapping="WrapWholeWords" />
             </StackPanel>
 
             <ComboBox x:Name="DefaultModelBox"
@@ -73,7 +74,8 @@
 
             <TextBlock x:Name="StatusText"
                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                       FontSize="12" />
+                       FontSize="12"
+                       TextWrapping="WrapWholeWords" />
         </StackPanel>
     </ScrollViewer>
 </Page>

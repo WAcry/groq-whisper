@@ -97,6 +97,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T01:48:44-07:00) Fixed the round-1 findings by rejecting malformed JSON envelopes with null entries as unsupported format, by preventing empty-editor Save from claiming unchanged keys when no usable local keys exist, and by re-running the Milestone 1 .NET test/build verification with zero warnings.
 - [x] (2026-04-19T01:56:07-07:00) Ran Milestone 1 review round 2 against the full diff from `79bc9891c0a71baedfd388cb634234711ecbe7bf` to `82791817552e70ff7ee3bfca89c512469f59d70f` and captured one important issue in the unsupported-format recovery flow plus one minor reminder about the current lack of automated Settings-page behavior coverage.
 - [x] (2026-04-19T01:56:07-07:00) Fixed the round-2 recovery issue by making `Reveal` open an empty editor even when local secret loading fails, with actionable guidance telling the user to paste replacement API keys and save. Re-verified the milestone with `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64` and `dotnet build ui/GroqWhisper.sln -p:Platform=x64`.
+- [x] (2026-04-19T02:04:25-07:00) Ran Milestone 1 review round 3 against the full diff from `79bc9891c0a71baedfd388cb634234711ecbe7bf` to `c5db3aa` and captured one important issue around file-access failures during eager key counting plus one minor issue around long recovery text wrapping.
+- [x] (2026-04-19T02:04:25-07:00) Fixed the round-3 findings by surfacing file-access failures as actionable local-secret read errors, by adding a regression test that locks the secret file during `LoadGroqApiKeys()`, and by enabling wrapping for long recovery/status text in the Settings page. Re-verified the milestone with `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64` and `dotnet build ui/GroqWhisper.sln -p:Platform=x64`.
+- [x] (2026-04-19T02:04:25-07:00) Stopped the Milestone 1 review loop after three rounds because no P0 issue remained and the user explicitly capped non-P0 review loops at three rounds.
 
 ## Surprises & Discoveries
 
@@ -132,6 +135,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 - Observation: a recoverable error message is not enough for the Settings page if the key editor remains hidden; the unsupported-format path also has to leave the replacement editor visible so the user can act immediately.
   Evidence: Milestone 1 review round 2 found that `Reveal` surfaced the error text but kept the multi-line editor collapsed, blocking direct overwrite of the bad local payload.
+
+- Observation: eager reads added for stored-key counts can fail on ordinary file access problems such as a locked or temporarily unreadable secret file, not just on decryption or format issues.
+  Evidence: Milestone 1 review round 3 identified that `File.ReadAllBytes` failures could still escape Settings-page initialization until the store started wrapping read-access exceptions as user-visible recovery errors.
 
 ## Decision Log
 
@@ -191,6 +197,10 @@ After this work, the Settings page will let the user manage multiple Groq API ke
   Rationale: The unsupported-format and decrypt-failure paths need an actionable in-place recovery flow, not just an error banner.
   Date/Author: 2026-04-19 / Codex
 
+- Decision: File-access failures while reading the stored secret are surfaced through the same recoverable UI path as other local-secret load failures instead of being allowed to crash eager Settings-page reads.
+  Rationale: The page now reads the stored secret during load to report key counts, so transient file-read failures need a stable user-facing error path.
+  Date/Author: 2026-04-19 / Codex
+
 - Decision: Frontend payload-shape automation will be added through a small pure request body helper or DTO in `ui/GroqWhisper.Core`, so `ui/GroqWhisper.Tests` can verify `api_keys` serialization without taking a dependency on the WinUI app assembly.
   Rationale: The existing test project already references `GroqWhisper.Core` but not `GroqWhisper`, so this is the lowest-friction path to automated frontend contract coverage.
   Date/Author: 2026-04-19 / Codex
@@ -209,7 +219,7 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 ## Outcomes & Retrospective
 
-Milestone 1 is implemented and passes its automated verification. After the second code-review round, the unsupported-format recovery path now also leaves the replacement editor open with direct instructions to paste new keys and save, so users are no longer blocked behind a hidden editor when local secret loading fails. The remaining gaps for this milestone are manual walkthrough confirmation and the absence of dedicated automated WinUI behavior tests, both of which remain acceptable for now because the repository currently has no UI-test harness and the milestone’s logic-heavy branches are still covered through storage tests plus solution builds.
+Milestone 1 is implemented and passes its automated verification. After the third and final allowed review round, the Windows-side multi-key storage flow now covers the main recovery cases called out during review: legacy raw-string payloads, malformed JSON envelopes, decrypt failures, file-read failures, empty-editor saves, and the “reveal a bad payload then immediately replace it” path all now degrade to actionable UI guidance instead of hidden or crashy failure modes. The remaining gaps for this milestone are manual walkthrough confirmation and the absence of dedicated automated WinUI behavior tests, both of which remain acceptable for now because the repository still has no UI-test harness and the three-round review cap prevents another non-P0 re-review.
 
 ## Context and Orientation
 
