@@ -12,6 +12,7 @@ import wave
 
 import numpy as np
 
+from .client_pool import RoundRobinTranscriptionClientPool, normalize_api_keys
 from .rolling_transcriber import (
     DEFAULT_GRANULARITIES,
     DEFAULT_MODEL,
@@ -244,27 +245,7 @@ class RealtimeTranscriptionService:
             return {"ok": True, "state": self._state.value}
 
     def _resolve_api_keys(self, explicit_api_keys: list[str] | None = None) -> list[str]:
-        if explicit_api_keys is None:
-            raise ValueError("Missing API keys. Save at least one key in Settings and try again.")
-
-        normalized_keys: list[str] = []
-        seen: set[str] = set()
-
-        for api_key in explicit_api_keys:
-            if not isinstance(api_key, str):
-                raise ValueError("API keys must be strings.")
-            normalized = api_key.strip()
-            if not normalized:
-                continue
-            if normalized in seen:
-                continue
-            seen.add(normalized)
-            normalized_keys.append(normalized)
-
-        if not normalized_keys:
-            raise ValueError("Missing API keys. Save at least one key in Settings and try again.")
-
-        return normalized_keys
+        return normalize_api_keys(explicit_api_keys)
 
     def _preflight(self, explicit_api_keys: list[str] | None = None) -> dict[str, Any]:
         results: dict[str, Any] = {
@@ -330,7 +311,10 @@ class RealtimeTranscriptionService:
             self.aggregator = self._build_aggregator()
             self.started_at_monotonic = self.clock()
             resolved_api_keys = self._resolve_api_keys(api_keys)
-            self.client = self.client_factory(resolved_api_keys[0])
+            self.client = RoundRobinTranscriptionClientPool(
+                resolved_api_keys,
+                client_factory=self.client_factory,
+            )
             self.capture = self.capture_factory(self.config)
             self.capture.start()
         except Exception as exc:

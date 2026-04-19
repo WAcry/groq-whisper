@@ -279,7 +279,7 @@ class StateTransitionTests(unittest.TestCase):
             self.assertEqual(service._state, ServiceState.running)
             service.stop()
 
-    def test_start_normalizes_and_uses_first_explicit_api_key(self) -> None:
+    def test_start_normalizes_api_keys_before_creating_client_pool(self) -> None:
         client_factory = mock.Mock(return_value=object())
         service = _make_service(
             client_factory=client_factory,
@@ -292,7 +292,11 @@ class StateTransitionTests(unittest.TestCase):
                 api_keys=["  explicit-key  ", "", "explicit-key", "backup-key"],
             )
             self.assertTrue(result["ok"])
-            client_factory.assert_called_once_with("explicit-key")
+            self.assertEqual(
+                client_factory.call_args_list,
+                [mock.call("explicit-key"), mock.call("backup-key")],
+            )
+            self.assertEqual(service.client.api_keys, ("explicit-key", "backup-key"))
             service.stop()
 
     def test_start_from_running_fails(self) -> None:
@@ -329,7 +333,7 @@ class StateTransitionTests(unittest.TestCase):
             return_value=b"audio",
         ):
             service.start(api_keys=["test-key"])
-            self.assertIs(service.client, client)
+            self.assertEqual(service.client.api_keys, ("test-key",))
 
             service.stop()
 

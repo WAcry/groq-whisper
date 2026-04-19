@@ -106,6 +106,8 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T02:15:54-07:00) Fixed the round-1 findings by updating `backend/src/groq_whisper_service/api.py` and `backend/src/groq_whisper_service/service.py` to accept `api_keys`, reject legacy `api_key` in `POST /start`, reject `api_keys` in `/settings`, and align backend messages to plural terminology. Added backend tests for the new contract and reran `C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_service.py -q`, `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64`, and `dotnet build ui\GroqWhisper.sln -p:Platform=x64`.
 - [x] (2026-04-19T02:24:37-07:00) Ran Milestone 2 review round 2 against the full diff from `7988db6` to `ec4f0f313f77e050f8eb009b47db79ed4c05bdd0`. The only remaining finding was a minor regression-coverage gap around `LiveViewModel.StartAsync()` actually loading all stored keys before issuing the request.
 - [x] (2026-04-19T02:24:37-07:00) Fixed the round-2 minor by introducing `ui/GroqWhisper.Core/TranscriptionStartPreparation.cs` and `ui/GroqWhisper.Tests/TranscriptionStartPreparationTests.cs`, then routing `LiveViewModel.StartAsync()` through that tested Core helper. Re-verified with `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64` and `dotnet build ui\GroqWhisper.sln -p:Platform=x64`.
+- [x] (2026-04-19T02:28:58-07:00) Implemented Milestone 3 by adding `backend/src/groq_whisper_service/client_pool.py` for normalized multi-key round-robin selection with one-step failover on retryable upstream errors, then wiring `RealtimeTranscriptionService.start()` to construct that pool instead of a single client.
+- [x] (2026-04-19T02:28:58-07:00) Verified Milestone 3 with `C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_service.py backend\tests\test_client_pool.py -q` and `C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_stable_prefix.py -q`.
 
 ## Surprises & Discoveries
 
@@ -153,6 +155,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 - Observation: the most practical way to cover the real frontend start wiring without introducing a WinUI test harness was to move the “load all stored keys and build the start request” step into a Core helper that the existing test project can exercise directly.
   Evidence: Milestone 2 review round 2 identified that DTO-serialization tests alone would not catch a regression back to singular key loading inside `LiveViewModel.StartAsync()`.
+
+- Observation: the installed `groq` SDK in this repo’s virtualenv exposes concrete retry-relevant exception classes such as `APIConnectionError`, `APITimeoutError`, `RateLimitError`, `InternalServerError`, and `APIStatusError`, which makes a conservative retry predicate implementable without guessing at message text.
+  Evidence: local inspection in the worktree virtualenv showed those classes and their inheritance hierarchy under `groq`.
 
 ## Decision Log
 
@@ -228,6 +233,14 @@ After this work, the Settings page will let the user manage multiple Groq API ke
   Rationale: This gives the current test project direct regression coverage over the actual multi-key start preparation logic without taking a dependency on the WinUI app assembly.
   Date/Author: 2026-04-19 / Codex
 
+- Decision: Runtime rotation is implemented in a new backend helper module rather than by rewriting the CLI-oriented code in `rolling_transcriber.py`.
+  Rationale: The desktop app’s service/session path needs multi-key selection, but the CLI path is explicitly staying single-key for this iteration. Isolating the pool helper keeps that boundary clear and lets `test_stable_prefix.py` continue validating the untouched CLI surface.
+  Date/Author: 2026-04-19 / Codex
+
+- Decision: The client pool serializes request selection and execution under one lock, then advances the global cursor only after a successful attempt.
+  Rationale: The current service model issues one transcription request at a time from a single worker thread, so this is the simplest way to guarantee deterministic order and the required “A fails, B succeeds, next request starts at C” semantics.
+  Date/Author: 2026-04-19 / Codex
+
 - Decision: Frontend payload-shape automation will be added through a small pure request body helper or DTO in `ui/GroqWhisper.Core`, so `ui/GroqWhisper.Tests` can verify `api_keys` serialization without taking a dependency on the WinUI app assembly.
   Rationale: The existing test project already references `GroqWhisper.Core` but not `GroqWhisper`, so this is the lowest-friction path to automated frontend contract coverage.
   Date/Author: 2026-04-19 / Codex
@@ -246,7 +259,7 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 ## Outcomes & Retrospective
 
-Milestone 1 is implemented and passes its automated verification. After the third and final allowed review round, the Windows-side multi-key storage flow now covers the main recovery cases called out during review: legacy raw-string payloads, malformed JSON envelopes, decrypt failures, file-read failures, empty-editor saves, and the “reveal a bad payload then immediately replace it” path all now degrade to actionable UI guidance instead of hidden or crashy failure modes. Milestone 2 is also implemented and verified locally after two review/fix rounds: both the Windows frontend and backend service now speak `api_keys`, the backend explicitly rejects legacy `api_key` start requests and all secret fields in `/settings`, and the frontend start wiring now has direct regression coverage for loading all stored keys before request creation. The remaining gaps are the actual per-request round-robin/failover behavior from Milestone 3 plus manual walkthrough confirmation after the end-to-end path is complete.
+Milestone 1 is implemented and passes its automated verification. After the third and final allowed review round, the Windows-side multi-key storage flow now covers the main recovery cases called out during review: legacy raw-string payloads, malformed JSON envelopes, decrypt failures, file-read failures, empty-editor saves, and the “reveal a bad payload then immediately replace it” path all now degrade to actionable UI guidance instead of hidden or crashy failure modes. Milestone 2 is also implemented and verified locally after two review/fix rounds: both the Windows frontend and backend service now speak `api_keys`, the backend explicitly rejects legacy `api_key` start requests and all secret fields in `/settings`, and the frontend start wiring now has direct regression coverage for loading all stored keys before request creation. Milestone 3 is now implemented and verified locally as well: the backend no longer pins a session to one client object, but instead routes each transcription request through a deterministic multi-key pool with one retry-eligible failover step, while the CLI path remains single-key. The remaining gap is final end-to-end/manual confirmation plus any review feedback from the Milestone 3 code review loop.
 
 ## Context and Orientation
 
