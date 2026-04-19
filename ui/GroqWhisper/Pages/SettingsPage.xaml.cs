@@ -106,6 +106,14 @@ public sealed partial class SettingsPage : Page
         RevealButton.Visibility = Visibility.Visible;
     }
 
+    private void ShowEditor(string draft)
+    {
+        ApiKeysEditor.Text = draft;
+        ApiKeysEditor.Visibility = Visibility.Visible;
+        HideButton.Visibility = Visibility.Visible;
+        RevealButton.Visibility = Visibility.Collapsed;
+    }
+
     private void UpdateStoredKeyState()
     {
         if (!SecretStore.HasGroqApiKeys())
@@ -136,17 +144,15 @@ public sealed partial class SettingsPage : Page
                 draft = string.Join(Environment.NewLine, storedKeys);
             }
 
-            ApiKeysEditor.Text = draft;
-            ApiKeysEditor.Visibility = Visibility.Visible;
-            HideButton.Visibility = Visibility.Visible;
-            RevealButton.Visibility = Visibility.Collapsed;
+            ShowEditor(draft);
             StatusText.Text = string.IsNullOrWhiteSpace(draft)
                 ? "Editor ready. Paste one API key per line."
                 : $"Revealed {GetDraftKeys().Count} stored API keys locally.";
         }
         catch (Exception ex)
         {
-            StatusText.Text = ex.Message;
+            ShowEditor("");
+            StatusText.Text = $"{ex.Message} Paste new API keys and click Save to replace the stored API keys.";
         }
     }
 

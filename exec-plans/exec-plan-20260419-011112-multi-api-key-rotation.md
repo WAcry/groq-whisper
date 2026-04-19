@@ -95,6 +95,8 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T01:39:44-07:00) Verified the Milestone 1 code path with `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64` and `dotnet build ui/GroqWhisper.sln -p:Platform=x64`.
 - [x] (2026-04-19T01:48:44-07:00) Ran Milestone 1 review round 1 against the full diff from `79bc9891c0a71baedfd388cb634234711ecbe7bf` to `cc4ed81` and captured one important issue around malformed-envelope recovery plus one minor Settings status-text issue.
 - [x] (2026-04-19T01:48:44-07:00) Fixed the round-1 findings by rejecting malformed JSON envelopes with null entries as unsupported format, by preventing empty-editor Save from claiming unchanged keys when no usable local keys exist, and by re-running the Milestone 1 .NET test/build verification with zero warnings.
+- [x] (2026-04-19T01:56:07-07:00) Ran Milestone 1 review round 2 against the full diff from `79bc9891c0a71baedfd388cb634234711ecbe7bf` to `82791817552e70ff7ee3bfca89c512469f59d70f` and captured one important issue in the unsupported-format recovery flow plus one minor reminder about the current lack of automated Settings-page behavior coverage.
+- [x] (2026-04-19T01:56:07-07:00) Fixed the round-2 recovery issue by making `Reveal` open an empty editor even when local secret loading fails, with actionable guidance telling the user to paste replacement API keys and save. Re-verified the milestone with `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64` and `dotnet build ui/GroqWhisper.sln -p:Platform=x64`.
 
 ## Surprises & Discoveries
 
@@ -127,6 +129,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 - Observation: `System.Text.Json` will deserialize `null` array elements inside the stored envelope even when the target property is a string list, so malformed local secrets must validate list contents explicitly instead of assuming every entry is non-null.
   Evidence: Milestone 1 review round 1 identified that a payload such as `{"Version":1,"ApiKeys":[null,"b"]}` would otherwise reach `Trim()` and throw `NullReferenceException`.
+
+- Observation: a recoverable error message is not enough for the Settings page if the key editor remains hidden; the unsupported-format path also has to leave the replacement editor visible so the user can act immediately.
+  Evidence: Milestone 1 review round 2 found that `Reveal` surfaced the error text but kept the multi-line editor collapsed, blocking direct overwrite of the bad local payload.
 
 ## Decision Log
 
@@ -182,6 +187,10 @@ After this work, the Settings page will let the user manage multiple Groq API ke
   Rationale: Users need a recoverable error path for bad local secret payloads, and the Settings page calls local-secret loading during page initialization.
   Date/Author: 2026-04-19 / Codex
 
+- Decision: When `Reveal` fails to load the stored keys, the Settings page still opens an empty multi-line editor and tells the user to paste replacement API keys before saving.
+  Rationale: The unsupported-format and decrypt-failure paths need an actionable in-place recovery flow, not just an error banner.
+  Date/Author: 2026-04-19 / Codex
+
 - Decision: Frontend payload-shape automation will be added through a small pure request body helper or DTO in `ui/GroqWhisper.Core`, so `ui/GroqWhisper.Tests` can verify `api_keys` serialization without taking a dependency on the WinUI app assembly.
   Rationale: The existing test project already references `GroqWhisper.Core` but not `GroqWhisper`, so this is the lowest-friction path to automated frontend contract coverage.
   Date/Author: 2026-04-19 / Codex
@@ -200,7 +209,7 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 ## Outcomes & Retrospective
 
-Milestone 1 is implemented and passes its automated verification. After the first code-review round, the Windows app now also treats malformed JSON secret envelopes as recoverable unsupported-format errors instead of allowing them to crash the Settings page, and the empty-editor Save path no longer claims unchanged keys when no usable local keys exist. The remaining gap for this milestone is manual walkthrough confirmation, which can be bundled into the broader end-to-end verification milestone after the frontend start contract and backend rotation logic are finished.
+Milestone 1 is implemented and passes its automated verification. After the second code-review round, the unsupported-format recovery path now also leaves the replacement editor open with direct instructions to paste new keys and save, so users are no longer blocked behind a hidden editor when local secret loading fails. The remaining gaps for this milestone are manual walkthrough confirmation and the absence of dedicated automated WinUI behavior tests, both of which remain acceptable for now because the repository currently has no UI-test harness and the milestone’s logic-heavy branches are still covered through storage tests plus solution builds.
 
 ## Context and Orientation
 
