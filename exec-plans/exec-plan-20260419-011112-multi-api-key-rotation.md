@@ -93,6 +93,8 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T01:39:44-07:00) Resumed execution after the user explicitly asked to implement the plan with milestone-level reviews capped at three rounds unless a P0 issue remains.
 - [x] (2026-04-19T01:39:44-07:00) Implemented Milestone 1 in `ui/GroqWhisper.Core/WindowsSecretStore.cs`, `ui/GroqWhisper/Pages/SettingsPage.xaml(.cs)`, and `ui/GroqWhisper.Tests/WindowsSecretStoreTests.cs` by switching local secret storage to a versioned multi-key envelope and updating the Settings page to edit, reveal, clear, and report plural API keys.
 - [x] (2026-04-19T01:39:44-07:00) Verified the Milestone 1 code path with `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64` and `dotnet build ui/GroqWhisper.sln -p:Platform=x64`.
+- [x] (2026-04-19T01:48:44-07:00) Ran Milestone 1 review round 1 against the full diff from `79bc9891c0a71baedfd388cb634234711ecbe7bf` to `cc4ed81` and captured one important issue around malformed-envelope recovery plus one minor Settings status-text issue.
+- [x] (2026-04-19T01:48:44-07:00) Fixed the round-1 findings by rejecting malformed JSON envelopes with null entries as unsupported format, by preventing empty-editor Save from claiming unchanged keys when no usable local keys exist, and by re-running the Milestone 1 .NET test/build verification with zero warnings.
 
 ## Surprises & Discoveries
 
@@ -122,6 +124,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 - Observation: the Settings-page changes can be compile-verified from the solution build, but there is still no automated WinUI interaction test project in this repository.
   Evidence: `dotnet build ui\GroqWhisper.sln -p:Platform=x64` passed after the page refactor, while `ui/GroqWhisper.Tests` continues to cover only `GroqWhisper.Core`.
+
+- Observation: `System.Text.Json` will deserialize `null` array elements inside the stored envelope even when the target property is a string list, so malformed local secrets must validate list contents explicitly instead of assuming every entry is non-null.
+  Evidence: Milestone 1 review round 1 identified that a payload such as `{"Version":1,"ApiKeys":[null,"b"]}` would otherwise reach `Trim()` and throw `NullReferenceException`.
 
 ## Decision Log
 
@@ -173,6 +178,10 @@ After this work, the Settings page will let the user manage multiple Groq API ke
   Rationale: The implemented storage must make the direct incompatible cut enforceable while still allowing a new-format one-key payload to round-trip correctly.
   Date/Author: 2026-04-19 / Codex
 
+- Decision: Malformed JSON envelopes, including envelopes that deserialize to null list entries, are treated as unsupported format rather than crashing the Settings page.
+  Rationale: Users need a recoverable error path for bad local secret payloads, and the Settings page calls local-secret loading during page initialization.
+  Date/Author: 2026-04-19 / Codex
+
 - Decision: Frontend payload-shape automation will be added through a small pure request body helper or DTO in `ui/GroqWhisper.Core`, so `ui/GroqWhisper.Tests` can verify `api_keys` serialization without taking a dependency on the WinUI app assembly.
   Rationale: The existing test project already references `GroqWhisper.Core` but not `GroqWhisper`, so this is the lowest-friction path to automated frontend contract coverage.
   Date/Author: 2026-04-19 / Codex
@@ -191,7 +200,7 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 ## Outcomes & Retrospective
 
-Milestone 1 is implemented and passes its automated verification. The Windows app now stores multiple local API keys inside a versioned JSON envelope protected by the existing DPAPI layer, and the Settings page has been updated to work in plural-key terms with explicit reveal, clear, and non-destructive empty-save behavior. The remaining gap for this milestone is manual walkthrough confirmation, which can be bundled into the broader end-to-end verification milestone after the frontend start contract and backend rotation logic are finished.
+Milestone 1 is implemented and passes its automated verification. After the first code-review round, the Windows app now also treats malformed JSON secret envelopes as recoverable unsupported-format errors instead of allowing them to crash the Settings page, and the empty-editor Save path no longer claims unchanged keys when no usable local keys exist. The remaining gap for this milestone is manual walkthrough confirmation, which can be bundled into the broader end-to-end verification milestone after the frontend start contract and backend rotation logic are finished.
 
 ## Context and Orientation
 

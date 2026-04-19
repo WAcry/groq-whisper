@@ -195,6 +195,7 @@ public sealed partial class SettingsPage : Page
     {
         var storedKeysUpdated = false;
         var storedKeysUnchanged = false;
+        var hadStoredKeys = false;
         var shouldClearEditorFields = false;
         try
         {
@@ -215,6 +216,7 @@ public sealed partial class SettingsPage : Page
             else
             {
                 storedKeysUnchanged = true;
+                hadStoredKeys = HasUsableStoredKeys();
             }
 
             if (DefaultModelBox.SelectedItem is ComboBoxItem modelItem)
@@ -232,7 +234,9 @@ public sealed partial class SettingsPage : Page
                 StatusText.Text = storedKeysUpdated
                     ? "API keys saved locally and settings saved."
                     : storedKeysUnchanged
-                        ? "Settings saved. Stored API keys were unchanged. Use Clear to remove them."
+                        ? hadStoredKeys
+                            ? "Settings saved. Stored API keys were unchanged. Use Clear to remove them."
+                            : "Settings saved. No API keys were changed."
                         : "Settings saved.";
             }
             else if (result.TryGetProperty("error", out var err))
@@ -241,7 +245,9 @@ public sealed partial class SettingsPage : Page
                 StatusText.Text = storedKeysUpdated
                     ? $"API keys saved locally, but backend settings were not applied: {error}"
                     : storedKeysUnchanged
-                        ? $"{error} Stored API keys were unchanged."
+                        ? hadStoredKeys
+                            ? $"{error} Stored API keys were unchanged."
+                            : $"{error} No API keys were changed."
                         : error;
             }
         }
@@ -256,6 +262,21 @@ public sealed partial class SettingsPage : Page
             if (shouldClearEditorFields)
                 ClearEditorFields();
             UpdateStoredKeyState();
+        }
+    }
+
+    private bool HasUsableStoredKeys()
+    {
+        if (!SecretStore.HasGroqApiKeys())
+            return false;
+
+        try
+        {
+            return SecretStore.LoadGroqApiKeys().Count > 0;
+        }
+        catch (InvalidOperationException)
+        {
+            return false;
         }
     }
 

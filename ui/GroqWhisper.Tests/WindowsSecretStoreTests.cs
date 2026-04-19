@@ -89,6 +89,22 @@ public sealed class WindowsSecretStoreTests : IDisposable
     }
 
     [Fact]
+    public void LoadRejectsMalformedEnvelopeWithNullEntry()
+    {
+        var store = new WindowsSecretStore(_tempDirectory, new PassthroughSecretProtector());
+        Directory.CreateDirectory(_tempDirectory);
+        File.WriteAllBytes(
+            Path.Combine(_tempDirectory, "groq-api-key.dat"),
+            Encoding.UTF8.GetBytes("""
+                {"Version":1,"ApiKeys":[null,"second-key"]}
+                """));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => store.LoadGroqApiKeys());
+
+        Assert.Contains("unsupported format", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void LoadWrapsCryptographicErrors()
     {
         var store = new WindowsSecretStore(_tempDirectory, new ThrowingUnprotectSecretProtector());

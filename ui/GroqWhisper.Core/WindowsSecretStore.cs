@@ -57,6 +57,8 @@ public sealed class WindowsSecretStore
 
     public void SaveGroqApiKeys(IEnumerable<string> apiKeys)
     {
+        ArgumentNullException.ThrowIfNull(apiKeys);
+
         var normalizedKeys = NormalizeApiKeys(apiKeys);
         if (normalizedKeys.Count == 0)
             throw new ArgumentException("At least one API key is required.", nameof(apiKeys));
@@ -64,7 +66,7 @@ public sealed class WindowsSecretStore
         var plaintext = JsonSerializer.Serialize(new SecretEnvelope
         {
             Version = SecretEnvelopeVersion,
-            ApiKeys = normalizedKeys,
+            ApiKeys = normalizedKeys.ConvertAll(static apiKey => (string?)apiKey),
         });
         WriteSecretPayload(plaintext);
     }
@@ -123,7 +125,7 @@ public sealed class WindowsSecretStore
     private static IReadOnlyList<string> DeserializeEnvelope(string plaintext)
     {
         if (string.IsNullOrWhiteSpace(plaintext) || !plaintext.TrimStart().StartsWith("{", StringComparison.Ordinal))
-            throw BuildUnsupportedFormatException();
+            throw BuildLegacyFormatException();
 
         try
         {
@@ -132,12 +134,12 @@ public sealed class WindowsSecretStore
                 envelope.Version != SecretEnvelopeVersion ||
                 envelope.ApiKeys is null)
             {
-                throw BuildUnsupportedFormatException();
+                throw BuildMalformedEnvelopeException();
             }
 
-            var normalizedKeys = NormalizeApiKeys(envelope.ApiKeys);
+            var normalizedKeys = NormalizeApiKeys(envelope.ApiKeys, rejectNullEntries: true);
             if (normalizedKeys.Count == 0)
-                throw BuildUnsupportedFormatException();
+                throw BuildMalformedEnvelopeException();
 
             return normalizedKeys;
         }
@@ -149,13 +151,20 @@ public sealed class WindowsSecretStore
         }
     }
 
-    private static List<string> NormalizeApiKeys(IEnumerable<string> apiKeys)
+    private static List<string> NormalizeApiKeys(IEnumerable<string?> apiKeys, bool rejectNullEntries = false)
     {
         var normalizedKeys = new List<string>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var apiKey in apiKeys)
         {
+            if (apiKey is null)
+            {
+                if (rejectNullEntries)
+                    throw BuildMalformedEnvelopeException();
+                continue;
+            }
+
             var normalized = apiKey.Trim();
             if (string.IsNullOrWhiteSpace(normalized))
                 continue;
@@ -167,15 +176,21 @@ public sealed class WindowsSecretStore
         return normalizedKeys;
     }
 
-    private static InvalidOperationException BuildUnsupportedFormatException()
+    private static InvalidOperationException BuildLegacyFormatException()
     {
         return new InvalidOperationException(
             "Stored API keys use an older unsupported format. Re-enter and save the keys in the new format.");
     }
 
+    private static InvalidOperationException BuildMalformedEnvelopeException()
+    {
+        return new InvalidOperationException(
+            "Stored API keys use an unsupported format. Re-enter and save the keys in the new format.");
+    }
+
     private sealed class SecretEnvelope
     {
         public int Version { get; init; }
-        public List<string>? ApiKeys { get; init; }
+        public List<string?>? ApiKeys { get; init; }
     }
 }
