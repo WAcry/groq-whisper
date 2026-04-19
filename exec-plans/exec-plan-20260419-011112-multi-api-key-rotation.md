@@ -90,7 +90,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T01:30:51-07:00) Ran a third full `$exec-agent-review` pass and captured the last important issues around empty-editor Save semantics and explicit normalization coverage.
 - [x] (2026-04-19T01:30:51-07:00) Folded the third review findings back into the ExecPlan by turning empty-editor Save into a single explicit rule and by making normalization and terminology consistency part of planned verification.
 - [x] (2026-04-19T01:32:46-07:00) Stopped the attempted fourth review round after the user clarified that only P0 issues may exceed three review rounds. This plan therefore exits the review loop after three rounds, with the last fixes accepted by user instruction rather than a fourth reviewer pass.
-- [ ] Stop after the planning phase unless the user explicitly asks to execute the plan.
+- [x] (2026-04-19T01:39:44-07:00) Resumed execution after the user explicitly asked to implement the plan with milestone-level reviews capped at three rounds unless a P0 issue remains.
+- [x] (2026-04-19T01:39:44-07:00) Implemented Milestone 1 in `ui/GroqWhisper.Core/WindowsSecretStore.cs`, `ui/GroqWhisper/Pages/SettingsPage.xaml(.cs)`, and `ui/GroqWhisper.Tests/WindowsSecretStoreTests.cs` by switching local secret storage to a versioned multi-key envelope and updating the Settings page to edit, reveal, clear, and report plural API keys.
+- [x] (2026-04-19T01:39:44-07:00) Verified the Milestone 1 code path with `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64` and `dotnet build ui/GroqWhisper.sln -p:Platform=x64`.
 
 ## Surprises & Discoveries
 
@@ -117,6 +119,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 - Observation: a newline-joined plaintext storage format would make an old single-key raw string indistinguishable from a valid new one-key save, so “direct incompatibility” requires a self-describing envelope.
   Evidence: both old and naive-new one-key payloads would decrypt to a single UTF-8 string unless the new format includes an explicit marker such as JSON structure or version metadata.
+
+- Observation: the Settings-page changes can be compile-verified from the solution build, but there is still no automated WinUI interaction test project in this repository.
+  Evidence: `dotnet build ui\GroqWhisper.sln -p:Platform=x64` passed after the page refactor, while `ui/GroqWhisper.Tests` continues to cover only `GroqWhisper.Core`.
 
 ## Decision Log
 
@@ -164,6 +169,10 @@ After this work, the Settings page will let the user manage multiple Groq API ke
   Rationale: This removes implementation ambiguity while preserving the existing dedicated destructive clear control.
   Date/Author: 2026-04-19 / Codex
 
+- Decision: The multi-key local secret is persisted as a JSON envelope with `Version` and `ApiKeys` fields, and legacy raw-string payloads fail fast with an actionable unsupported-format message instead of silent reinterpretation.
+  Rationale: The implemented storage must make the direct incompatible cut enforceable while still allowing a new-format one-key payload to round-trip correctly.
+  Date/Author: 2026-04-19 / Codex
+
 - Decision: Frontend payload-shape automation will be added through a small pure request body helper or DTO in `ui/GroqWhisper.Core`, so `ui/GroqWhisper.Tests` can verify `api_keys` serialization without taking a dependency on the WinUI app assembly.
   Rationale: The existing test project already references `GroqWhisper.Core` but not `GroqWhisper`, so this is the lowest-friction path to automated frontend contract coverage.
   Date/Author: 2026-04-19 / Codex
@@ -182,7 +191,7 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 ## Outcomes & Retrospective
 
-Planning stage only so far. The repository has a clean baseline, an isolated worktree, and an initial technical direction that matches the user’s product choices. No implementation has been started in this phase.
+Milestone 1 is implemented and passes its automated verification. The Windows app now stores multiple local API keys inside a versioned JSON envelope protected by the existing DPAPI layer, and the Settings page has been updated to work in plural-key terms with explicit reveal, clear, and non-destructive empty-save behavior. The remaining gap for this milestone is manual walkthrough confirmation, which can be bundled into the broader end-to-end verification milestone after the frontend start contract and backend rotation logic are finished.
 
 ## Context and Orientation
 

@@ -11,11 +11,16 @@
                        Style="{StaticResource SubtitleTextBlockStyle}" />
 
             <StackPanel Spacing="8">
-                <TextBlock Text="Groq API Key" />
-                <PasswordBox x:Name="ApiKeyPasswordBox"
-                             PlaceholderText="Paste your Groq API key" />
-                <TextBox x:Name="ApiKeyRevealBox"
-                         PlaceholderText="Paste your Groq API key"
+                <TextBlock Text="Groq API Keys" />
+                <TextBlock Text="Use one API key per line. Stored keys stay hidden until you click Reveal."
+                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                           TextWrapping="WrapWholeWords" />
+                <TextBox x:Name="ApiKeysEditor"
+                         AcceptsReturn="True"
+                         TextWrapping="Wrap"
+                         MinHeight="120"
+                         MaxHeight="240"
+                         PlaceholderText="Paste one API key per line"
                          Visibility="Collapsed" />
                 <StackPanel Orientation="Horizontal" Spacing="8">
                     <Button x:Name="RevealButton"
@@ -26,7 +31,7 @@
                             Click="Hide_Click"
                             Visibility="Collapsed" />
                     <Button x:Name="ClearButton"
-                            Content="Clear Key"
+                            Content="Clear Keys"
                             Click="ClearKey_Click" />
                 </StackPanel>
                 <TextBlock x:Name="KeyStateText"

@@ -11,7 +11,7 @@ public sealed partial class SettingsPage : Page
     private TranscriptionApiClient Api => App.Api ?? throw new InvalidOperationException("API client not set");
     private WindowsSecretStore SecretStore => App.SecretStore;
     private BackendStateCoordinator BackendState => App.BackendState;
-    private bool IsRevealed => ApiKeyRevealBox.Visibility == Visibility.Visible;
+    private bool IsRevealed => ApiKeysEditor.Visibility == Visibility.Visible;
 
     public SettingsPage()
     {
@@ -78,42 +78,51 @@ public sealed partial class SettingsPage : Page
         LanguageBox.IsEnabled = canMutate;
         WindowSecondsBox.IsEnabled = canMutate;
         HopSecondsBox.IsEnabled = canMutate;
-        ApiKeyPasswordBox.IsEnabled = canMutate;
-        ApiKeyRevealBox.IsEnabled = canMutate;
+        ApiKeysEditor.IsEnabled = canMutate;
         if (canMutate)
         {
             MutatingStateText.Text = "";
         }
         else if (!BackendState.LastRefreshSucceeded)
         {
-            MutatingStateText.Text = "Backend state could not be verified. Reconnect the backend before changing settings or the stored key.";
+            MutatingStateText.Text = "Backend state could not be verified. Reconnect the backend before changing settings or the stored keys.";
         }
         else
         {
-            MutatingStateText.Text = "Stop the active transcription session before changing settings or the stored key.";
+            MutatingStateText.Text = "Stop the active transcription session before changing settings or the stored keys.";
         }
     }
 
     private string GetKeyDraft()
     {
-        return IsRevealed ? ApiKeyRevealBox.Text : ApiKeyPasswordBox.Password;
+        return ApiKeysEditor.Text;
     }
 
     private void ClearEditorFields()
     {
-        ApiKeyPasswordBox.Password = "";
-        ApiKeyRevealBox.Text = "";
-        ApiKeyRevealBox.Visibility = Visibility.Collapsed;
-        ApiKeyPasswordBox.Visibility = Visibility.Visible;
+        ApiKeysEditor.Text = "";
+        ApiKeysEditor.Visibility = Visibility.Collapsed;
         HideButton.Visibility = Visibility.Collapsed;
         RevealButton.Visibility = Visibility.Visible;
     }
 
     private void UpdateStoredKeyState()
     {
-        KeyStateText.Text = SecretStore.HasGroqApiKey()
-            ? "API key stored locally for this Windows user."
-            : "No API key stored.";
+        if (!SecretStore.HasGroqApiKeys())
+        {
+            KeyStateText.Text = "No API keys stored.";
+            return;
+        }
+
+        try
+        {
+            var keyCount = SecretStore.LoadGroqApiKeys().Count;
+            KeyStateText.Text = $"Stored API keys: {keyCount}. They remain encrypted for this Windows user.";
+        }
+        catch (InvalidOperationException ex)
+        {
+            KeyStateText.Text = ex.Message;
+        }
     }
 
     private void Reveal_Click(object sender, RoutedEventArgs e)
@@ -122,21 +131,18 @@ public sealed partial class SettingsPage : Page
         {
             var draft = GetKeyDraft();
             if (string.IsNullOrWhiteSpace(draft))
-                draft = SecretStore.LoadGroqApiKey();
-
-            if (string.IsNullOrWhiteSpace(draft))
             {
-                StatusText.Text = "No stored API key to reveal.";
-                return;
+                var storedKeys = SecretStore.LoadGroqApiKeys();
+                draft = string.Join(Environment.NewLine, storedKeys);
             }
 
-            ApiKeyPasswordBox.Password = draft;
-            ApiKeyRevealBox.Text = draft;
-            ApiKeyRevealBox.Visibility = Visibility.Visible;
-            ApiKeyPasswordBox.Visibility = Visibility.Collapsed;
+            ApiKeysEditor.Text = draft;
+            ApiKeysEditor.Visibility = Visibility.Visible;
             HideButton.Visibility = Visibility.Visible;
             RevealButton.Visibility = Visibility.Collapsed;
-            StatusText.Text = "API key revealed locally.";
+            StatusText.Text = string.IsNullOrWhiteSpace(draft)
+                ? "Editor ready. Paste one API key per line."
+                : $"Revealed {GetDraftKeys().Count} stored API keys locally.";
         }
         catch (Exception ex)
         {
@@ -147,7 +153,7 @@ public sealed partial class SettingsPage : Page
     private void Hide_Click(object sender, RoutedEventArgs e)
     {
         ClearEditorFields();
-        StatusText.Text = "Revealed API key cleared from the form.";
+        StatusText.Text = "Revealed API keys cleared from the form.";
     }
 
     private async Task<bool> EnsureCanMutateSettingsAsync(string blockedMessage)
@@ -167,17 +173,17 @@ public sealed partial class SettingsPage : Page
 
     private async void ClearKey_Click(object sender, RoutedEventArgs e)
     {
-        if (!await EnsureCanMutateSettingsAsync("Stop the active transcription session before clearing the stored key."))
+        if (!await EnsureCanMutateSettingsAsync("Stop the active transcription session before clearing the stored keys."))
         {
             return;
         }
 
         try
         {
-            SecretStore.ClearGroqApiKey();
+            SecretStore.ClearGroqApiKeys();
             ClearEditorFields();
             UpdateStoredKeyState();
-            StatusText.Text = "Stored API key cleared.";
+            StatusText.Text = "Stored API keys cleared.";
         }
         catch (Exception ex)
         {
@@ -187,7 +193,8 @@ public sealed partial class SettingsPage : Page
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
-        var storedKeyUpdated = false;
+        var storedKeysUpdated = false;
+        var storedKeysUnchanged = false;
         var shouldClearEditorFields = false;
         try
         {
@@ -201,9 +208,13 @@ public sealed partial class SettingsPage : Page
             var keyDraft = GetKeyDraft();
             if (!string.IsNullOrWhiteSpace(keyDraft))
             {
-                SecretStore.SaveGroqApiKey(keyDraft);
-                storedKeyUpdated = true;
+                SecretStore.SaveGroqApiKeys(GetDraftKeys());
+                storedKeysUpdated = true;
                 UpdateStoredKeyState();
+            }
+            else
+            {
+                storedKeysUnchanged = true;
             }
 
             if (DefaultModelBox.SelectedItem is ComboBoxItem modelItem)
@@ -218,22 +229,26 @@ public sealed partial class SettingsPage : Page
             var result = await Api.PutSettingsAsync(settings);
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
             {
-                StatusText.Text = storedKeyUpdated
-                    ? "API key saved locally and settings saved."
-                    : "Settings saved.";
+                StatusText.Text = storedKeysUpdated
+                    ? "API keys saved locally and settings saved."
+                    : storedKeysUnchanged
+                        ? "Settings saved. Stored API keys were unchanged. Use Clear to remove them."
+                        : "Settings saved.";
             }
             else if (result.TryGetProperty("error", out var err))
             {
                 var error = err.GetString() ?? "Settings save failed.";
-                StatusText.Text = storedKeyUpdated
-                    ? $"API key saved locally, but backend settings were not applied: {error}"
-                    : error;
+                StatusText.Text = storedKeysUpdated
+                    ? $"API keys saved locally, but backend settings were not applied: {error}"
+                    : storedKeysUnchanged
+                        ? $"{error} Stored API keys were unchanged."
+                        : error;
             }
         }
         catch (Exception ex)
         {
-            StatusText.Text = storedKeyUpdated
-                ? $"API key saved locally, but backend settings were not applied: {ex.Message}"
+            StatusText.Text = storedKeysUpdated
+                ? $"API keys saved locally, but backend settings were not applied: {ex.Message}"
                 : $"Error: {ex.Message}";
         }
         finally
@@ -242,5 +257,12 @@ public sealed partial class SettingsPage : Page
                 ClearEditorFields();
             UpdateStoredKeyState();
         }
+    }
+
+    private IReadOnlyList<string> GetDraftKeys()
+    {
+        return GetKeyDraft()
+            .Split(["\r\n", "\n"], StringSplitOptions.None)
+            .ToList();
     }
 }

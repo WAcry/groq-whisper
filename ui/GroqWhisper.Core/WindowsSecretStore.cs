@@ -1,10 +1,12 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace GroqWhisper.Core;
 
 public sealed class WindowsSecretStore
 {
+    private const int SecretEnvelopeVersion = 1;
     private readonly string _secretPath;
     private readonly ISecretProtector _protector;
 
@@ -18,12 +20,14 @@ public sealed class WindowsSecretStore
         _protector = protector ?? new DpapiSecretProtector();
     }
 
-    public bool HasGroqApiKey() => File.Exists(_secretPath);
+    public bool HasGroqApiKeys() => File.Exists(_secretPath);
 
-    public string? LoadGroqApiKey()
+    public bool HasGroqApiKey() => HasGroqApiKeys();
+
+    public IReadOnlyList<string> LoadGroqApiKeys()
     {
         if (!File.Exists(_secretPath))
-            return null;
+            return [];
 
         try
         {
@@ -31,7 +35,7 @@ public sealed class WindowsSecretStore
             var plaintextBytes = _protector.Unprotect(protectedBytes);
             try
             {
-                return Encoding.UTF8.GetString(plaintextBytes);
+                return DeserializeEnvelope(Encoding.UTF8.GetString(plaintextBytes));
             }
             finally
             {
@@ -41,9 +45,28 @@ public sealed class WindowsSecretStore
         catch (CryptographicException ex)
         {
             throw new InvalidOperationException(
-                "Stored API key could not be decrypted. Clear it and enter the key again.",
+                "Stored API keys could not be decrypted. Clear them and enter the keys again.",
                 ex);
         }
+    }
+
+    public string? LoadGroqApiKey()
+    {
+        return LoadGroqApiKeys().FirstOrDefault();
+    }
+
+    public void SaveGroqApiKeys(IEnumerable<string> apiKeys)
+    {
+        var normalizedKeys = NormalizeApiKeys(apiKeys);
+        if (normalizedKeys.Count == 0)
+            throw new ArgumentException("At least one API key is required.", nameof(apiKeys));
+
+        var plaintext = JsonSerializer.Serialize(new SecretEnvelope
+        {
+            Version = SecretEnvelopeVersion,
+            ApiKeys = normalizedKeys,
+        });
+        WriteSecretPayload(plaintext);
     }
 
     public void SaveGroqApiKey(string apiKey)
@@ -51,8 +74,23 @@ public sealed class WindowsSecretStore
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new ArgumentException("API key cannot be empty.", nameof(apiKey));
 
-        var normalized = apiKey.Trim();
-        var plaintextBytes = Encoding.UTF8.GetBytes(normalized);
+        SaveGroqApiKeys([apiKey]);
+    }
+
+    public void ClearGroqApiKeys()
+    {
+        if (File.Exists(_secretPath))
+            File.Delete(_secretPath);
+    }
+
+    public void ClearGroqApiKey()
+    {
+        ClearGroqApiKeys();
+    }
+
+    private void WriteSecretPayload(string plaintext)
+    {
+        var plaintextBytes = Encoding.UTF8.GetBytes(plaintext);
         byte[]? protectedBytes = null;
         var directory = Path.GetDirectoryName(_secretPath)
             ?? throw new InvalidOperationException("Secret path has no parent directory.");
@@ -82,9 +120,62 @@ public sealed class WindowsSecretStore
         }
     }
 
-    public void ClearGroqApiKey()
+    private static IReadOnlyList<string> DeserializeEnvelope(string plaintext)
     {
-        if (File.Exists(_secretPath))
-            File.Delete(_secretPath);
+        if (string.IsNullOrWhiteSpace(plaintext) || !plaintext.TrimStart().StartsWith("{", StringComparison.Ordinal))
+            throw BuildUnsupportedFormatException();
+
+        try
+        {
+            var envelope = JsonSerializer.Deserialize<SecretEnvelope>(plaintext);
+            if (envelope is null ||
+                envelope.Version != SecretEnvelopeVersion ||
+                envelope.ApiKeys is null)
+            {
+                throw BuildUnsupportedFormatException();
+            }
+
+            var normalizedKeys = NormalizeApiKeys(envelope.ApiKeys);
+            if (normalizedKeys.Count == 0)
+                throw BuildUnsupportedFormatException();
+
+            return normalizedKeys;
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException(
+                "Stored API keys use an unsupported format. Re-enter and save the keys in the new format.",
+                ex);
+        }
+    }
+
+    private static List<string> NormalizeApiKeys(IEnumerable<string> apiKeys)
+    {
+        var normalizedKeys = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var apiKey in apiKeys)
+        {
+            var normalized = apiKey.Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+                continue;
+            if (!seen.Add(normalized))
+                continue;
+            normalizedKeys.Add(normalized);
+        }
+
+        return normalizedKeys;
+    }
+
+    private static InvalidOperationException BuildUnsupportedFormatException()
+    {
+        return new InvalidOperationException(
+            "Stored API keys use an older unsupported format. Re-enter and save the keys in the new format.");
+    }
+
+    private sealed class SecretEnvelope
+    {
+        public int Version { get; init; }
+        public List<string>? ApiKeys { get; init; }
     }
 }
