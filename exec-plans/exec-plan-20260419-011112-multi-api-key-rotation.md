@@ -112,6 +112,8 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T02:36:12-07:00) Fixed the round-1 minor findings by adding a worker-loop service test that exercises `transcribe_bytes()` through the pool-backed client surface, and by changing the service to normalize `api_keys` once per start call before passing the normalized list into preflight and the pool constructor. Re-verified with `C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_service.py backend\tests\test_client_pool.py -q` and `C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_stable_prefix.py -q`.
 - [x] (2026-04-19T02:41:00-07:00) Ran final combined automated verification from the worktree: `dotnet test ui\GroqWhisper.Tests\GroqWhisper.Tests.csproj -p:Platform=x64` passed with 19 tests, `C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_service.py backend\tests\test_client_pool.py backend\tests\test_stable_prefix.py -q` passed with `108 passed, 1 skipped, 3 subtests passed`, and `dotnet build ui\GroqWhisper.sln -p:Platform=x64` succeeded with 0 warnings and 0 errors.
 - [x] (2026-04-19T02:41:00-07:00) Ran a launch-level smoke test from the worktree build output by starting `ui\GroqWhisper\bin\x64\Debug\net8.0-windows10.0.19041.0\GroqWhisper.exe`, confirming UI PID `1408`, spawned backend Python PID `26848`, listener port `61742`, and `GET /healthz` returning `{\"status\":\"ok\"}`.
+- [x] (2026-04-19T02:46:58-07:00) Ran Milestone 4 review round 1 against the full diff from `96038d6` to `e7be470` and captured two important issues in the wrap-up document: Milestone 4 still mixed follow-up manual QA with blocking completion criteria, and the official automated verification block had not yet promoted `backend/tests/test_client_pool.py` into the acceptance command list. The review also flagged one minor reproducibility gap because the smoke-launched desktop app and backend were left running and could lock later builds.
+- [x] (2026-04-19T02:46:58-07:00) Fixed the Milestone 4 round-1 findings by aligning Milestone 4, verification, and acceptance wording around a launch-level smoke boundary plus follow-up manual QA, by adding `backend/tests/test_client_pool.py` to the official automated verification commands, by terminating the smoke-launched `GroqWhisper.exe` and backend `serve.py` processes, and by rerunning `dotnet build ui\GroqWhisper.sln -p:Platform=x64` successfully after cleanup to confirm the worktree returned to a repeatable build state.
 
 ## Surprises & Discoveries
 
@@ -168,6 +170,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 - Observation: even without a WinUI interaction harness, the desktop app's backend bootstrap can be smoke-tested non-interactively by launching the worktree executable, finding the spawned Python listener, and probing `/healthz`.
   Evidence: launching the worktree build produced UI PID `1408`, backend PID `26848`, a loopback listener on port `61742`, and a successful `GET /healthz` response of `{"status":"ok"}`.
+
+- Observation: leaving the smoke-launched desktop app and backend process alive can lock `GroqWhisper` build outputs and break the next `dotnet build` until those processes are torn down.
+  Evidence: the Milestone 4 review independently reproduced a locked-file build failure while the worktree `GroqWhisper.exe` and its spawned `serve.py` processes were still running; after terminating PIDs `1408`, `26848`, and `27256`, `dotnet build ui\GroqWhisper.sln -p:Platform=x64` succeeded again.
 
 ## Decision Log
 
@@ -277,7 +282,7 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 ## Outcomes & Retrospective
 
-Milestone 1 is implemented and passes its automated verification. After the third and final allowed review round, the Windows-side multi-key storage flow now covers the main recovery cases called out during review: legacy raw-string payloads, malformed JSON envelopes, decrypt failures, file-read failures, empty-editor saves, and the “reveal a bad payload then immediately replace it” path all now degrade to actionable UI guidance instead of hidden or crashy failure modes. Milestone 2 is also implemented and verified locally after two review/fix rounds: both the Windows frontend and backend service now speak `api_keys`, the backend explicitly rejects legacy `api_key` start requests and all secret fields in `/settings`, and the frontend start wiring now has direct regression coverage for loading all stored keys before request creation. Milestone 3 is implemented and verified locally after one review/fix round: the backend no longer pins a session to one client object, but instead routes each transcription request through a deterministic multi-key pool with one retry-eligible failover step, the service normalizes keys once per start call, and the CLI path remains single-key. Milestone 4's automated verification is now complete as well: the updated .NET and Python suites pass, the desktop app builds cleanly from the worktree, and a launch-level smoke test confirmed that the worktree executable starts and brings up a healthy backend. The only remaining gap is the richer manual Settings and Live-page walkthrough, which is not automated in this terminal environment and should be treated as follow-up manual QA rather than an unresolved implementation defect.
+Milestone 1 is implemented and passes its automated verification. After the third and final allowed review round, the Windows-side multi-key storage flow now covers the main recovery cases called out during review: legacy raw-string payloads, malformed JSON envelopes, decrypt failures, file-read failures, empty-editor saves, and the “reveal a bad payload then immediately replace it” path all now degrade to actionable UI guidance instead of hidden or crashy failure modes. Milestone 2 is also implemented and verified locally after two review/fix rounds: both the Windows frontend and backend service now speak `api_keys`, the backend explicitly rejects legacy `api_key` start requests and all secret fields in `/settings`, and the frontend start wiring now has direct regression coverage for loading all stored keys before request creation. Milestone 3 is implemented and verified locally after one review/fix round: the backend no longer pins a session to one client object, but instead routes each transcription request through a deterministic multi-key pool with one retry-eligible failover step, the service normalizes keys once per start call, and the CLI path remains single-key. Milestone 4's automated verification is now complete as well: the updated .NET and Python suites pass, the desktop app builds cleanly from the worktree, and a launch-level smoke test confirmed that the worktree executable starts and brings up a healthy backend. Milestone 4 review round 1 tightened the final sign-off boundary so the plan now consistently treats Settings and Live-page click-through as follow-up manual QA rather than a blocking requirement for this non-interactive terminal session, and the smoke-launched processes were explicitly cleaned up before a repeat build. The only remaining gap is that richer manual walkthrough, which should be handled as follow-up manual QA rather than an unresolved implementation defect.
 
 ## Context and Orientation
 
@@ -312,9 +317,9 @@ After this milestone, clicking Start on the Live page sends a list of keys rathe
 
 After this milestone, each transcription request uses the next key in the pool, and retry-eligible upstream failures attempt one retry using the next distinct key. Verification is via Python tests that assert request ordering, fallback behavior, the cursor position after a failover success, and the no-distinct-key case. Completion requires the rotation logic to be deterministic, thread-safe for the current service model, and able to surface a clear terminal error when all allowed attempts fail without changing the existing CLI’s single-key usage path.
 
-### Milestone 4: Full verification and user-visible confirmation
+### Milestone 4: Full verification and launch-level smoke confirmation
 
-After this milestone, both the .NET and Python test suites covering the changed areas pass, the desktop app builds, and the plan document reflects the final implementation and findings. Verification is via the listed automated test commands plus a manual Settings -> Start demo. Completion requires the final user-visible behavior to match the Goal Specification and the ExecPlan’s living sections to be updated.
+After this milestone, both the .NET and Python test suites covering the changed areas pass, the desktop app builds, a launch-level smoke test confirms that the worktree executable can bootstrap a healthy backend, and the plan document reflects the final implementation and findings. Verification is via the listed automated test commands plus a launch-level app smoke test from the worktree build output. Completion requires the verification evidence and process cleanup to be recorded in the ExecPlan’s living sections. Richer Settings and Live-page walkthrough remains follow-up manual QA because this terminal environment does not provide a stable WinUI automation harness.
 
 ## Work Plan
 
@@ -365,11 +370,11 @@ Finally, update backend tests in `backend/tests/test_service.py` and `backend/te
     code backend\src\groq_whisper_service\api.py
     code backend\src\groq_whisper_service\service.py
     code backend\src\groq_whisper_service\rolling_transcriber.py
-    C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_service.py -q
+    C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_service.py backend\tests\test_client_pool.py -q
     C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_stable_prefix.py -q
     ```
 
-6. Run combined verification and a manual app smoke test from the worktree.
+6. Run combined verification and a launch-level app smoke test from the worktree, then tear down the spawned desktop app/backend processes so later builds remain repeatable.
 
 Failure handling guidance:
 - If `dotnet build` fails because the desktop app executable is locked, stop the running `GroqWhisper.exe` process tree first, then rerun the build.
@@ -383,18 +388,21 @@ Automated verification must include:
 
 ```powershell
 dotnet test ui\GroqWhisper.Tests\GroqWhisper.Tests.csproj -p:Platform=x64
-C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_service.py -q
-C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_stable_prefix.py -q
+C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_service.py backend\tests\test_client_pool.py backend\tests\test_stable_prefix.py -q
 dotnet build ui\GroqWhisper.sln -p:Platform=x64
 ```
 
-Manual verification must include:
+Launch-level smoke verification for this milestone must include:
 
 1. Launch the desktop app from the worktree build output.
-2. Open Settings, paste three keys on separate lines, save, navigate away, return, and use Reveal to confirm the same three keys load back into the editor.
-3. If an old single-key local payload exists, confirm the page shows the explicit unsupported-format guidance rather than silently treating it as a valid one-item list.
-4. Start a transcription session and confirm that the app transitions to Running with no “missing key” error.
-5. Use the automated backend tests as the authoritative proof for request distribution and failover semantics, including the no-distinct-key case.
+2. Confirm that the spawned backend responds successfully on `/healthz`.
+3. Tear down the smoke-launched desktop app and backend processes so later builds and tests remain repeatable.
+
+Follow-up manual QA outside this non-interactive terminal session should include:
+
+1. Open Settings, paste three keys on separate lines, save, navigate away, return, and use Reveal to confirm the same three keys load back into the editor.
+2. If an old single-key local payload exists, confirm the page shows the explicit unsupported-format guidance rather than silently treating it as a valid one-item list.
+3. Start a transcription session and confirm that the app transitions to Running with no “missing key” error.
 
 Acceptance criteria:
 - The user can manage multiple keys in the Settings page without manual file editing.
@@ -405,6 +413,8 @@ Acceptance criteria:
 - Normalization behavior for whitespace, blank lines, duplicates, and ordering is explicitly covered by tests at both the local-storage and backend-start boundaries.
 - Runtime request selection is deterministic and covered by tests.
 - Retry-on-next-key behavior is covered by tests and does not spin indefinitely.
+- The worktree desktop app launches and the spawned backend passes `/healthz` in a launch-level smoke test.
+- The smoke-launched desktop app and backend are torn down so repeated local builds remain reproducible.
 - Secrets remain excluded from `/settings` payloads and continue to be stored only on the Windows side.
 
 Consistency requirement:
