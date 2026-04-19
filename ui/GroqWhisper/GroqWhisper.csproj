@@ -24,6 +24,10 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\GroqWhisper.Core\GroqWhisper.Core.csproj" />
+  </ItemGroup>
+
   <!-- Copy Python backend into output directory for self-contained deployment -->
   <ItemGroup>
     <Content Include="..\..\backend\serve.py" Link="backend\serve.py">

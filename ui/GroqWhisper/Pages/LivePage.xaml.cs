@@ -19,6 +19,7 @@ public sealed partial class LivePage : Page
     {
         if (App.Api is not null)
             ViewModel.SetApiClient(App.Api);
+        ViewModel.SetBackendStateCoordinator(App.BackendState);
         await ViewModel.LoadModelFromSettingsAsync();
     }
 

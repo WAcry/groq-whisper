@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using GroqWhisper.Core;
 using GroqWhisper.Models;
 using GroqWhisper.Services;
 
@@ -10,6 +11,7 @@ namespace GroqWhisper.ViewModels;
 public partial class LiveViewModel : ObservableObject
 {
     private TranscriptionApiClient? _api;
+    private BackendStateCoordinator? _backendState;
     private readonly DispatcherQueue _dispatcher;
     private CancellationTokenSource? _eventCts;
 
@@ -39,6 +41,10 @@ public partial class LiveViewModel : ObservableObject
         _api = api;
     }
 
+    public void SetBackendStateCoordinator(BackendStateCoordinator coordinator)
+    {
+        _backendState = coordinator;
+    }
     partial void OnTickCountChanged(int value)
     {
         TickCountDisplay = value.ToString();
@@ -73,12 +79,21 @@ public partial class LiveViewModel : ObservableObject
     {
         try
         {
-            var result = await Api.PostStartAsync(model: SelectedModelId);
+            var apiKey = App.SecretStore.LoadGroqApiKey();
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                ErrorMessage = "No Groq API key is stored. Open Settings and save a key first.";
+                ErrorVisibility = Visibility.Visible;
+                return;
+            }
+
+            var result = await Api.PostStartAsync(model: SelectedModelId, apiKey: apiKey);
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
             {
                 _currentState = ServiceState.Running;
                 StateDisplay = "Running";
                 ModelDisplay = SelectedModelId;
+                _backendState?.OnStartSucceeded();
                 if (result.TryGetProperty("session_id", out var sid))
                     _currentSessionId = sid.GetString();
                 StartEventStream();
@@ -106,6 +121,7 @@ public partial class LiveViewModel : ObservableObject
             {
                 _currentState = ServiceState.Paused;
                 StateDisplay = "Paused";
+                _backendState?.OnPauseSucceeded();
             }
             else if (result.TryGetProperty("error", out var err))
             {
@@ -126,6 +142,7 @@ public partial class LiveViewModel : ObservableObject
             {
                 _currentState = ServiceState.Running;
                 StateDisplay = "Running";
+                _backendState?.OnResumeSucceeded();
                 if (result.TryGetProperty("session_id", out var sid))
                     _currentSessionId = sid.GetString();
             }
@@ -148,11 +165,22 @@ public partial class LiveViewModel : ObservableObject
             {
                 _currentState = ServiceState.Idle;
                 StateDisplay = "Idle";
+                _backendState?.OnStopSucceeded();
             }
             else if (result.TryGetProperty("error", out var err))
             {
                 ErrorMessage = err.GetString() ?? "Stop failed";
                 ErrorVisibility = Visibility.Visible;
+                if (result.TryGetProperty("state", out var stateValue))
+                {
+                    var state = ServiceStateExtensions.Parse(stateValue.GetString());
+                    if (state == ServiceState.Error)
+                    {
+                        _currentState = ServiceState.Error;
+                        StateDisplay = "Error";
+                        _backendState?.OnError();
+                    }
+                }
             }
             await Task.Delay(500);
             StopEventStream();
@@ -218,6 +246,7 @@ public partial class LiveViewModel : ObservableObject
         StopEventStream();
         _currentState = ServiceState.Error;
         StateDisplay = "Backend Disconnected";
+        _backendState?.OnBackendDisconnected();
         ErrorMessage = "Backend process exited unexpectedly";
         ErrorVisibility = Visibility.Visible;
     }
@@ -255,16 +284,19 @@ public partial class LiveViewModel : ObservableObject
                             ErrorVisibility = Visibility.Visible;
                             _currentState = ServiceState.Error;
                             StateDisplay = "Error";
+                            _backendState?.OnError();
                             break;
 
                         case "service.paused":
                             _currentState = ServiceState.Paused;
                             StateDisplay = "Paused";
+                            _backendState?.OnPauseSucceeded();
                             break;
 
                         case "service.resumed":
                             _currentState = ServiceState.Running;
                             StateDisplay = "Running";
+                            _backendState?.OnResumeSucceeded();
                             var resumed = evt.Deserialize<Dictionary<string, string>>();
                             if (resumed?.TryGetValue("session_id", out var newSid) == true)
                                 _currentSessionId = newSid;
@@ -281,6 +313,7 @@ public partial class LiveViewModel : ObservableObject
                     ErrorVisibility = Visibility.Visible;
                     _currentState = ServiceState.Error;
                     StateDisplay = "Disconnected";
+                    _backendState?.OnBackendDisconnected();
                 });
             }
         }
@@ -293,6 +326,7 @@ public partial class LiveViewModel : ObservableObject
                 ErrorVisibility = Visibility.Visible;
                 _currentState = ServiceState.Error;
                 StateDisplay = "Disconnected";
+                _backendState?.OnBackendDisconnected();
             });
         }
     }

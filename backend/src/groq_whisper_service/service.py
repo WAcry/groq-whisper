@@ -7,7 +7,6 @@ import queue
 import subprocess
 import threading
 import time
-from pathlib import Path
 from typing import Any, Callable, Protocol
 import wave
 
@@ -17,7 +16,6 @@ from .rolling_transcriber import (
     DEFAULT_GRANULARITIES,
     DEFAULT_MODEL,
     create_client,
-    load_api_key,
     transcribe_bytes,
 )
 from .stable_prefix import AggregatorConfig, PatchEvent, StablePrefixAggregator
@@ -77,7 +75,6 @@ class RealtimeTranscriptionServiceConfig:
     commit_lag_seconds: float = 7.0
     poll_interval_seconds: float = DEFAULT_CAPTURE_POLL_INTERVAL_SECONDS
     capture_retention_seconds: float = DEFAULT_CAPTURE_RETENTION_SECONDS
-    api_key_file: Path | None = None
 
 
 def build_default_capture(
@@ -155,7 +152,6 @@ class RealtimeTranscriptionService:
         config: RealtimeTranscriptionServiceConfig | None = None,
         *,
         capture_factory: CaptureFactory | None = None,
-        api_key_loader: Callable[[Path | None], str] = load_api_key,
         client_factory: Callable[[str], Any] = create_client,
         transcribe_func: Callable[..., dict[str, Any]] = transcribe_bytes,
         clock: Callable[[], float] = time.perf_counter,
@@ -170,7 +166,6 @@ class RealtimeTranscriptionService:
             raise ValueError("commit_lag_seconds must be non-negative")
 
         self.capture_factory = capture_factory or build_default_capture
-        self.api_key_loader = api_key_loader
         self.client_factory = client_factory
         self.transcribe_func = transcribe_func
         self.clock = clock
@@ -223,15 +218,19 @@ class RealtimeTranscriptionService:
                     "state": self._state.value,
                     "error": "Settings can only be changed when idle",
                 }
+            if "api_key" in overrides or "api_key_file" in overrides:
+                return {
+                    "ok": False,
+                    "state": self._state.value,
+                    "error": "Secrets are not accepted in /settings. Save the API key in the Windows app settings and send it only in POST /start.",
+                }
             allowed_fields = {
                 "model", "prompt", "language", "window_seconds",
-                "hop_seconds", "commit_lag_seconds", "api_key_file",
+                "hop_seconds", "commit_lag_seconds",
             }
             current = asdict(self.config)
             for key, value in overrides.items():
                 if key in allowed_fields:
-                    if key == "api_key_file" and value is not None:
-                        value = Path(value)
                     current[key] = value
             candidate = RealtimeTranscriptionServiceConfig(**current)
             validation_errors = self._validate_config(candidate)
@@ -244,14 +243,22 @@ class RealtimeTranscriptionService:
             self.config = candidate
             return {"ok": True, "state": self._state.value}
 
-    def _preflight(self) -> dict[str, Any]:
+    def _resolve_api_key(self, explicit_api_key: str | None = None) -> str:
+        if explicit_api_key is None:
+            raise ValueError("Missing API key. Save a key in Settings and try again.")
+        normalized = explicit_api_key.strip()
+        if not normalized:
+            raise ValueError("Missing API key. Save a key in Settings and try again.")
+        return normalized
+
+    def _preflight(self, explicit_api_key: str | None = None) -> dict[str, Any]:
         results: dict[str, Any] = {
             "api_key": False,
             "ffmpeg": False,
             "errors": [],
         }
         try:
-            self.api_key_loader(self.config.api_key_file)
+            self._resolve_api_key(explicit_api_key)
             results["api_key"] = True
         except Exception as exc:
             results["errors"].append(f"API key: {exc}")
@@ -270,7 +277,7 @@ class RealtimeTranscriptionService:
             results["errors"].append(f"ffmpeg check: {exc}")
         return results
 
-    def start(self) -> dict[str, Any]:
+    def start(self, *, api_key: str | None = None) -> dict[str, Any]:
         with self.state_lock:
             if self._state not in (ServiceState.idle, ServiceState.error):
                 return {
@@ -287,7 +294,7 @@ class RealtimeTranscriptionService:
             self._state = ServiceState.preflight
             self._capture_stopped.clear()
 
-        preflight = self._preflight()
+        preflight = self._preflight(api_key)
         self._preflight_results = preflight
 
         if preflight["errors"]:
@@ -307,8 +314,8 @@ class RealtimeTranscriptionService:
             self.latest_patch_payload = None
             self.aggregator = self._build_aggregator()
             self.started_at_monotonic = self.clock()
-            api_key = self.api_key_loader(self.config.api_key_file)
-            self.client = self.client_factory(api_key)
+            resolved_api_key = self._resolve_api_key(api_key)
+            self.client = self.client_factory(resolved_api_key)
             self.capture = self.capture_factory(self.config)
             self.capture.start()
         except Exception as exc:
@@ -374,7 +381,11 @@ class RealtimeTranscriptionService:
         if worker is not None and worker.is_alive():
             worker.join(timeout=15.0)
             if worker.is_alive():
+                self._safe_stop_capture(signal_paused=False)
+                self.client = None
+                self._finalize_dangling_session()
                 with self.state_lock:
+                    self.running = False
                     self._state = ServiceState.error
                     self.last_error = "Worker thread did not stop within timeout"
                 return {
@@ -386,6 +397,7 @@ class RealtimeTranscriptionService:
             self.capture.stop()
             self.capture = None
         self.worker_thread = None
+        self.client = None
         self._finalize_dangling_session()
         with self.state_lock:
             self.running = False
@@ -686,6 +698,7 @@ class RealtimeTranscriptionService:
                     )
             finally:
                 self._safe_stop_capture(signal_paused=False)
+                self.client = None
                 with self.state_lock:
                     self.running = False
                     if self._state == ServiceState.running:

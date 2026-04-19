@@ -18,12 +18,14 @@ public sealed class TranscriptionApiClient
     public async Task<JsonElement> PostStartAsync(
         string? model = null,
         string? language = null,
-        string? prompt = null)
+        string? prompt = null,
+        string? apiKey = null)
     {
         var body = new Dictionary<string, string>();
         if (model is not null) body["model"] = model;
         if (language is not null) body["language"] = language;
         if (prompt is not null) body["prompt"] = prompt;
+        if (apiKey is not null) body["api_key"] = apiKey;
 
         var content = body.Count > 0
             ? new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
@@ -50,9 +52,9 @@ public sealed class TranscriptionApiClient
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    public async Task<JsonElement> GetStateAsync()
+    public async Task<JsonElement> GetStateAsync(CancellationToken cancellationToken = default)
     {
-        return await _http.GetFromJsonAsync<JsonElement>("/state");
+        return await _http.GetFromJsonAsync<JsonElement>("/state", cancellationToken);
     }
 
     public async Task<JsonElement> GetDevicesAsync()
