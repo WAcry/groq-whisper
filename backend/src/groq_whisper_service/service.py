@@ -247,17 +247,21 @@ class RealtimeTranscriptionService:
     def _resolve_api_keys(self, explicit_api_keys: list[str] | None = None) -> list[str]:
         return normalize_api_keys(explicit_api_keys)
 
-    def _preflight(self, explicit_api_keys: list[str] | None = None) -> dict[str, Any]:
+    def _preflight(
+        self,
+        *,
+        normalized_api_keys: list[str] | None,
+        api_keys_error: Exception | None = None,
+    ) -> dict[str, Any]:
         results: dict[str, Any] = {
             "api_keys": False,
             "ffmpeg": False,
             "errors": [],
         }
-        try:
-            self._resolve_api_keys(explicit_api_keys)
+        if normalized_api_keys is not None:
             results["api_keys"] = True
-        except Exception as exc:
-            results["errors"].append(f"API keys: {exc}")
+        elif api_keys_error is not None:
+            results["errors"].append(f"API keys: {api_keys_error}")
         try:
             proc = subprocess.run(
                 ["ffmpeg", "-version"],
@@ -290,7 +294,17 @@ class RealtimeTranscriptionService:
             self._state = ServiceState.preflight
             self._capture_stopped.clear()
 
-        preflight = self._preflight(api_keys)
+        resolved_api_keys: list[str] | None = None
+        api_keys_error: Exception | None = None
+        try:
+            resolved_api_keys = self._resolve_api_keys(api_keys)
+        except Exception as exc:
+            api_keys_error = exc
+
+        preflight = self._preflight(
+            normalized_api_keys=resolved_api_keys,
+            api_keys_error=api_keys_error,
+        )
         self._preflight_results = preflight
 
         if preflight["errors"]:
@@ -310,8 +324,9 @@ class RealtimeTranscriptionService:
             self.latest_patch_payload = None
             self.aggregator = self._build_aggregator()
             self.started_at_monotonic = self.clock()
-            resolved_api_keys = self._resolve_api_keys(api_keys)
-            self.client = RoundRobinTranscriptionClientPool(
+            if resolved_api_keys is None:
+                raise RuntimeError("The live transcription service was not initialized with API keys.")
+            self.client = RoundRobinTranscriptionClientPool.from_normalized_api_keys(
                 resolved_api_keys,
                 client_factory=self.client_factory,
             )

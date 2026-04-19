@@ -66,6 +66,23 @@ class FakeCapture:
         )
 
 
+class FakeTranscriptionEndpoint:
+    def __init__(self, api_key: str, call_log: list[str]) -> None:
+        self._api_key = api_key
+        self._call_log = call_log
+
+    def create(self, **request: object) -> dict[str, object]:
+        self._call_log.append(self._api_key)
+        return make_transcription(self._api_key)
+
+
+class FakeAudioClient:
+    def __init__(self, api_key: str, call_log: list[str]) -> None:
+        self.audio = type("FakeAudioNamespace", (), {
+            "transcriptions": FakeTranscriptionEndpoint(api_key, call_log),
+        })()
+
+
 def make_transcription(word: str) -> dict[str, object]:
     return {
         "text": word,
@@ -287,17 +304,48 @@ class StateTransitionTests(unittest.TestCase):
         with mock.patch(
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
-        ):
+        ), mock.patch(
+            "groq_whisper_service.service.RoundRobinTranscriptionClientPool.from_normalized_api_keys",
+            return_value=object(),
+        ) as pool_factory:
             result = service.start(
                 api_keys=["  explicit-key  ", "", "explicit-key", "backup-key"],
             )
             self.assertTrue(result["ok"])
-            self.assertEqual(
-                client_factory.call_args_list,
-                [mock.call("explicit-key"), mock.call("backup-key")],
+            pool_factory.assert_called_once_with(
+                ["explicit-key", "backup-key"],
+                client_factory=client_factory,
             )
-            self.assertEqual(service.client.api_keys, ("explicit-key", "backup-key"))
             service.stop()
+
+    def test_service_worker_uses_client_pool_through_transcribe_bytes(self) -> None:
+        config = RealtimeTranscriptionServiceConfig(
+            window_seconds=0.10,
+            hop_seconds=0.05,
+            commit_lag_seconds=0.0,
+        )
+        call_log: list[str] = []
+        service = RealtimeTranscriptionService(
+            config,
+            capture_factory=FakeCapture,
+            client_factory=lambda api_key: FakeAudioClient(api_key, call_log),
+        )
+
+        with mock.patch(
+            "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
+            return_value=b"audio",
+        ):
+            result = service.start(api_keys=["first-key", "second-key"])
+            self.assertTrue(result["ok"])
+
+            deadline = time.perf_counter() + 1.0
+            while time.perf_counter() < deadline and len(call_log) < 2:
+                time.sleep(0.01)
+
+            service.stop()
+
+        self.assertGreaterEqual(len(call_log), 2)
+        self.assertEqual(call_log[:2], ["first-key", "second-key"])
 
     def test_start_from_running_fails(self) -> None:
         service = _make_service()

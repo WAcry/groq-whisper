@@ -80,7 +80,36 @@ class RoundRobinTranscriptionClientPool:
         client_factory: Callable[[str], Any],
         retryable_error_predicate: Callable[[Exception], bool] = is_retryable_transcription_error,
     ) -> None:
-        self._api_keys = normalize_api_keys(api_keys)
+        self._initialize(
+            normalize_api_keys(api_keys),
+            client_factory=client_factory,
+            retryable_error_predicate=retryable_error_predicate,
+        )
+
+    @classmethod
+    def from_normalized_api_keys(
+        cls,
+        api_keys: Iterable[str],
+        *,
+        client_factory: Callable[[str], Any],
+        retryable_error_predicate: Callable[[Exception], bool] = is_retryable_transcription_error,
+    ) -> "RoundRobinTranscriptionClientPool":
+        instance = cls.__new__(cls)
+        instance._initialize(
+            list(api_keys),
+            client_factory=client_factory,
+            retryable_error_predicate=retryable_error_predicate,
+        )
+        return instance
+
+    def _initialize(
+        self,
+        api_keys: list[str],
+        *,
+        client_factory: Callable[[str], Any],
+        retryable_error_predicate: Callable[[Exception], bool],
+    ) -> None:
+        self._api_keys = api_keys
         self._clients = [client_factory(api_key) for api_key in self._api_keys]
         self._retryable_error_predicate = retryable_error_predicate
         self._next_index = 0
