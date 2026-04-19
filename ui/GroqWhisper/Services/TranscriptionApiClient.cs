@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using GroqWhisper.Core;
 using GroqWhisper.Models;
 
 namespace GroqWhisper.Services;
@@ -19,17 +20,17 @@ public sealed class TranscriptionApiClient
         string? model = null,
         string? language = null,
         string? prompt = null,
-        string? apiKey = null)
+        IEnumerable<string>? apiKeys = null)
     {
-        var body = new Dictionary<string, string>();
-        if (model is not null) body["model"] = model;
-        if (language is not null) body["language"] = language;
-        if (prompt is not null) body["prompt"] = prompt;
-        if (apiKey is not null) body["api_key"] = apiKey;
-
-        var content = body.Count > 0
-            ? new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json")
-            : null;
+        var request = TranscriptionStartRequest.Create(
+            model: model,
+            language: language,
+            prompt: prompt,
+            apiKeys: apiKeys);
+        var content = new StringContent(
+            JsonSerializer.Serialize(request),
+            Encoding.UTF8,
+            "application/json");
         var response = await _http.PostAsync("/start", content);
         return await response.Content.ReadFromJsonAsync<JsonElement>();
     }

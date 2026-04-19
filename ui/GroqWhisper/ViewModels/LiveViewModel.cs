@@ -82,15 +82,15 @@ public partial class LiveViewModel : ObservableObject
     {
         try
         {
-            var apiKey = App.SecretStore.LoadGroqApiKey();
-            if (string.IsNullOrWhiteSpace(apiKey))
+            var apiKeys = App.SecretStore.LoadGroqApiKeys();
+            if (apiKeys.Count == 0)
             {
-                ErrorMessage = "No Groq API key is stored. Open Settings and save a key first.";
+                ErrorMessage = "No Groq API keys are stored. Open Settings and save at least one key first.";
                 ErrorVisibility = Visibility.Visible;
                 return;
             }
 
-            var result = await Api.PostStartAsync(model: SelectedModelId, apiKey: apiKey);
+            var result = await Api.PostStartAsync(model: SelectedModelId, apiKeys: apiKeys);
             if (result.TryGetProperty("ok", out var ok) && ok.GetBoolean())
             {
                 UpdateState(ServiceState.Running, "Running");

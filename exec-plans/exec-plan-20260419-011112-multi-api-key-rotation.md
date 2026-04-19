@@ -100,6 +100,8 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T02:04:25-07:00) Ran Milestone 1 review round 3 against the full diff from `79bc9891c0a71baedfd388cb634234711ecbe7bf` to `c5db3aa` and captured one important issue around file-access failures during eager key counting plus one minor issue around long recovery text wrapping.
 - [x] (2026-04-19T02:04:25-07:00) Fixed the round-3 findings by surfacing file-access failures as actionable local-secret read errors, by adding a regression test that locks the secret file during `LoadGroqApiKeys()`, and by enabling wrapping for long recovery/status text in the Settings page. Re-verified the milestone with `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64` and `dotnet build ui/GroqWhisper.sln -p:Platform=x64`.
 - [x] (2026-04-19T02:04:25-07:00) Stopped the Milestone 1 review loop after three rounds because no P0 issue remained and the user explicitly capped non-P0 review loops at three rounds.
+- [x] (2026-04-19T02:06:39-07:00) Implemented Milestone 2 in `ui/GroqWhisper.Core/TranscriptionStartRequest.cs`, `ui/GroqWhisper.Tests/TranscriptionStartRequestTests.cs`, `ui/GroqWhisper/Services/TranscriptionApiClient.cs`, and `ui/GroqWhisper/ViewModels/LiveViewModel.cs` by moving the frontend `/start` payload to `api_keys` and routing serialization through a Core DTO that tests can validate directly.
+- [x] (2026-04-19T02:06:39-07:00) Verified the Milestone 2 frontend contract with `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64` and `dotnet build ui/GroqWhisper.sln -p:Platform=x64`, both passing with zero warnings.
 
 ## Surprises & Discoveries
 
@@ -138,6 +140,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 - Observation: eager reads added for stored-key counts can fail on ordinary file access problems such as a locked or temporarily unreadable secret file, not just on decryption or format issues.
   Evidence: Milestone 1 review round 3 identified that `File.ReadAllBytes` failures could still escape Settings-page initialization until the store started wrapping read-access exceptions as user-visible recovery errors.
+
+- Observation: the current .NET test project constraint was real in practice: the easiest way to get automated frontend contract coverage without referencing the WinUI assembly was to move the `/start` body shape into `GroqWhisper.Core` as a pure serializable DTO.
+  Evidence: Milestone 2 added `TranscriptionStartRequest` under `ui/GroqWhisper.Core` and exercised it directly from `ui/GroqWhisper.Tests`, while the WinUI project continued to build unchanged from the test project’s perspective.
 
 ## Decision Log
 
@@ -201,6 +206,10 @@ After this work, the Settings page will let the user manage multiple Groq API ke
   Rationale: The page now reads the stored secret during load to report key counts, so transient file-read failures need a stable user-facing error path.
   Date/Author: 2026-04-19 / Codex
 
+- Decision: The frontend `/start` contract is implemented through a dedicated Core DTO with JSON property annotations rather than ad hoc dictionary construction in the HTTP client.
+  Rationale: This keeps the `api_keys` payload shape explicit, makes serialization testable from the existing test project, and reduces the chance of drifting back to the old `api_key` field by accident.
+  Date/Author: 2026-04-19 / Codex
+
 - Decision: Frontend payload-shape automation will be added through a small pure request body helper or DTO in `ui/GroqWhisper.Core`, so `ui/GroqWhisper.Tests` can verify `api_keys` serialization without taking a dependency on the WinUI app assembly.
   Rationale: The existing test project already references `GroqWhisper.Core` but not `GroqWhisper`, so this is the lowest-friction path to automated frontend contract coverage.
   Date/Author: 2026-04-19 / Codex
@@ -219,7 +228,7 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 ## Outcomes & Retrospective
 
-Milestone 1 is implemented and passes its automated verification. After the third and final allowed review round, the Windows-side multi-key storage flow now covers the main recovery cases called out during review: legacy raw-string payloads, malformed JSON envelopes, decrypt failures, file-read failures, empty-editor saves, and the “reveal a bad payload then immediately replace it” path all now degrade to actionable UI guidance instead of hidden or crashy failure modes. The remaining gaps for this milestone are manual walkthrough confirmation and the absence of dedicated automated WinUI behavior tests, both of which remain acceptable for now because the repository still has no UI-test harness and the three-round review cap prevents another non-P0 re-review.
+Milestone 1 is implemented and passes its automated verification. After the third and final allowed review round, the Windows-side multi-key storage flow now covers the main recovery cases called out during review: legacy raw-string payloads, malformed JSON envelopes, decrypt failures, file-read failures, empty-editor saves, and the “reveal a bad payload then immediately replace it” path all now degrade to actionable UI guidance instead of hidden or crashy failure modes. Milestone 2 is now also implemented and verified locally: the Windows frontend’s `/start` request is no longer built around a single `api_key` string, and the test suite now has direct regression coverage for `api_keys` JSON serialization through the new Core DTO. The remaining gaps are still the backend-side contract update and runtime rotation logic, plus manual walkthrough confirmation after the end-to-end path is complete.
 
 ## Context and Orientation
 
