@@ -109,7 +109,7 @@ class RealtimeServiceTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            service.start(api_key="test-key")
+            service.start(api_keys=["test-key"])
             subscriber = service.subscribe(replay_latest=False)
             patch_events: list[dict[str, object]] = []
 
@@ -205,7 +205,7 @@ class StateTransitionTests(unittest.TestCase):
         self.assertFalse(stop_result["ok"])
         self.assertIs(service.worker_thread, worker)
 
-        start_result = service.start(api_key="test-key")
+        start_result = service.start(api_keys=["test-key"])
 
         self.assertFalse(start_result["ok"])
         self.assertEqual(start_result["state"], "error")
@@ -273,13 +273,13 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            result = service.start(api_key="explicit-key")
+            result = service.start(api_keys=["explicit-key"])
             self.assertTrue(result["ok"])
             self.assertEqual(result["state"], "running")
             self.assertEqual(service._state, ServiceState.running)
             service.stop()
 
-    def test_start_uses_explicit_api_key_instead_of_loader(self) -> None:
+    def test_start_normalizes_and_uses_first_explicit_api_key(self) -> None:
         client_factory = mock.Mock(return_value=object())
         service = _make_service(
             client_factory=client_factory,
@@ -288,7 +288,9 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            result = service.start(api_key="explicit-key")
+            result = service.start(
+                api_keys=["  explicit-key  ", "", "explicit-key", "backup-key"],
+            )
             self.assertTrue(result["ok"])
             client_factory.assert_called_once_with("explicit-key")
             service.stop()
@@ -299,8 +301,8 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            service.start(api_key="test-key")
-            result = service.start(api_key="test-key")
+            service.start(api_keys=["test-key"])
+            result = service.start(api_keys=["test-key"])
             self.assertFalse(result["ok"])
             self.assertEqual(result["state"], "running")
             service.stop()
@@ -313,7 +315,7 @@ class StateTransitionTests(unittest.TestCase):
 
     def test_stop_from_error_succeeds(self) -> None:
         service = _make_service()
-        service.start(api_key=" ")
+        service.start(api_keys=[" "])
         self.assertEqual(service._state, ServiceState.error)
         result = service.stop()
         self.assertTrue(result["ok"])
@@ -326,7 +328,7 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            service.start(api_key="test-key")
+            service.start(api_keys=["test-key"])
             self.assertIs(service.client, client)
 
             service.stop()
@@ -343,7 +345,7 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            service.start(api_key="test-key")
+            service.start(api_keys=["test-key"])
 
             deadline = time.perf_counter() + 1.0
             while time.perf_counter() < deadline and service._state != ServiceState.error:
@@ -358,7 +360,7 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            service.start(api_key="test-key")
+            service.start(api_keys=["test-key"])
             pause_result = service.pause()
             self.assertTrue(pause_result["ok"])
             self.assertEqual(pause_result["state"], "paused")
@@ -382,7 +384,7 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            service.start(api_key="test-key")
+            service.start(api_keys=["test-key"])
             result = service.resume()
             self.assertFalse(result["ok"])
             service.stop()
@@ -393,7 +395,7 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            service.start(api_key="test-key")
+            service.start(api_keys=["test-key"])
             service.pause()
             result = service.stop()
             self.assertTrue(result["ok"])
@@ -401,10 +403,10 @@ class StateTransitionTests(unittest.TestCase):
 
     def test_preflight_failure_transitions_to_error(self) -> None:
         service = _make_service()
-        result = service.start(api_key=" ")
+        result = service.start(api_keys=[" "])
         self.assertFalse(result["ok"])
         self.assertEqual(result["state"], "error")
-        self.assertIn("API key", result["error"])
+        self.assertIn("API keys", result["error"])
 
     def test_start_from_error_state_succeeds(self) -> None:
         service = _make_service()
@@ -412,11 +414,11 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            result1 = service.start(api_key=" ")
+            result1 = service.start(api_keys=[" "])
             self.assertFalse(result1["ok"])
             self.assertEqual(service._state, ServiceState.error)
 
-            result2 = service.start(api_key="test-key")
+            result2 = service.start(api_keys=["test-key"])
             self.assertTrue(result2["ok"])
             self.assertEqual(service._state, ServiceState.running)
             service.stop()
@@ -442,7 +444,7 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            service.start(api_key="test-key")
+            service.start(api_keys=["test-key"])
             result = service.update_config({"model": "whisper-large-v3"})
             self.assertFalse(result["ok"])
             self.assertEqual(service.config.model, "whisper-large-v3-turbo")
@@ -463,7 +465,7 @@ class StateTransitionTests(unittest.TestCase):
 
     def test_update_config_rejects_secret_fields(self) -> None:
         service = _make_service()
-        result = service.update_config({"api_key_file": "C:/tmp/GROQ_APIKEY"})
+        result = service.update_config({"api_keys": ["test-key"]})
         self.assertFalse(result["ok"])
         self.assertIn("/settings", result["error"])
 
@@ -472,7 +474,7 @@ class StateTransitionTests(unittest.TestCase):
             raise RuntimeError("capture device unavailable")
 
         service = _make_service(capture_factory=bad_capture_factory)
-        result = service.start(api_key="test-key")
+        result = service.start(api_keys=["test-key"])
         self.assertFalse(result["ok"])
         self.assertEqual(result["state"], "error")
         self.assertIn("capture device", result["error"])
@@ -490,7 +492,7 @@ class StateTransitionTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            service.start(api_key="test-key")
+            service.start(api_keys=["test-key"])
             session_id = service._current_session_id
             self.assertIsNotNone(session_id)
 
@@ -527,7 +529,7 @@ class ApiEndpointTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            resp = self.client.post("/start", json={"api_key": "test-key"})
+            resp = self.client.post("/start", json={"api_keys": ["test-key"]})
             self.assertEqual(resp.status_code, 200)
             self.assertTrue(resp.json()["ok"])
 
@@ -547,7 +549,7 @@ class ApiEndpointTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            self.client.post("/start", json={"api_key": "test-key"})
+            self.client.post("/start", json={"api_keys": ["test-key"]})
             resp = self.client.post("/pause")
             self.assertEqual(resp.status_code, 200)
             self.assertEqual(resp.json()["state"], "paused")
@@ -563,6 +565,7 @@ class ApiEndpointTests(unittest.TestCase):
         data = resp.json()
         self.assertIn("model", data)
         self.assertIn("window_seconds", data)
+        self.assertNotIn("api_keys", data)
         self.assertNotIn("api_key_file", data)
 
     def test_settings_put_when_idle(self) -> None:
@@ -578,7 +581,7 @@ class ApiEndpointTests(unittest.TestCase):
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
             return_value=b"audio",
         ):
-            self.client.post("/start", json={"api_key": "test-key"})
+            self.client.post("/start", json={"api_keys": ["test-key"]})
             resp = self.client.put("/settings", json={"model": "whisper-large-v3"})
             self.assertEqual(resp.status_code, 409)
             self.client.post("/stop")
@@ -592,6 +595,10 @@ class ApiEndpointTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 400)
         self.assertIn("no longer accepted", resp.json()["error"])
 
+        resp = self.client.put("/settings", json={"api_keys": ["test-key"]})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("no longer accepted", resp.json()["error"])
+
     def test_start_with_config_overrides(self) -> None:
         with mock.patch(
             "groq_whisper_service.service.encode_audio_window_to_flac_bytes",
@@ -599,22 +606,35 @@ class ApiEndpointTests(unittest.TestCase):
         ):
             resp = self.client.post(
                 "/start",
-                json={"api_key": "test-key", "model": "whisper-large-v3", "language": "zh"},
+                json={"api_keys": ["test-key"], "model": "whisper-large-v3", "language": "zh"},
             )
             self.assertEqual(resp.status_code, 200)
             self.assertEqual(self.service.config.model, "whisper-large-v3")
             self.assertEqual(self.service.config.language, "zh")
             self.client.post("/stop")
 
-    def test_start_requires_explicit_api_key(self) -> None:
+    def test_start_requires_explicit_api_keys(self) -> None:
         resp = self.client.post("/start")
         self.assertEqual(resp.status_code, 400)
-        self.assertIn("Missing API key", resp.json()["error"])
+        self.assertIn("Missing API keys", resp.json()["error"])
+
+    def test_start_rejects_blank_api_keys(self) -> None:
+        resp = self.client.post("/start", json={"api_keys": [" ", "\t"]})
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Missing API keys", resp.json()["error"])
+
+    def test_start_rejects_legacy_api_key_field(self) -> None:
+        resp = self.client.post(
+            "/start",
+            json={"api_key": "test-key"},
+        )
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("api_key is no longer supported", resp.json()["error"])
 
     def test_start_rejects_legacy_api_key_file_field(self) -> None:
         resp = self.client.post(
             "/start",
-            json={"api_key": "test-key", "api_key_file": "C:/tmp/GROQ_APIKEY"},
+            json={"api_keys": ["test-key"], "api_key_file": "C:/tmp/GROQ_APIKEY"},
         )
         self.assertEqual(resp.status_code, 400)
         self.assertIn("no longer supported", resp.json()["error"])

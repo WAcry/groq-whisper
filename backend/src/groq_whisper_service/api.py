@@ -127,20 +127,29 @@ def create_app(
                 pass
         if "api_key_file" in body:
             return JSONResponse(
-                {"ok": False, "error": "api_key_file is no longer supported. Save the API key in the Windows app settings."},
+                {"ok": False, "error": "api_key_file is no longer supported. Save the API keys in the Windows app settings."},
                 status_code=400,
             )
-        api_key = body.pop("api_key", None)
-        if not isinstance(api_key, str) or not api_key.strip():
+        if "api_key" in body:
             return JSONResponse(
-                {"ok": False, "error": "Missing API key. Save a key in Settings and try again."},
+                {"ok": False, "error": "api_key is no longer supported. Send api_keys in POST /start instead."},
+                status_code=400,
+            )
+        api_keys = body.pop("api_keys", None)
+        if (
+            not isinstance(api_keys, list)
+            or any(not isinstance(item, str) for item in api_keys)
+            or not any(item.strip() for item in api_keys)
+        ):
+            return JSONResponse(
+                {"ok": False, "error": "Missing API keys. Save at least one key in Settings and try again."},
                 status_code=400,
             )
         if body:
             result = active_service.update_config(body)
             if not result["ok"]:
                 return JSONResponse(result, status_code=409)
-        result = active_service.start(api_key=api_key)
+        result = active_service.start(api_keys=api_keys)
         status_code = 200 if result["ok"] else 409
         return JSONResponse(result, status_code=status_code)
 
@@ -173,12 +182,12 @@ def create_app(
     @app.put("/settings")
     async def put_settings(request: Request) -> JSONResponse:
         body = await request.json()
-        secret_fields = [field for field in ("api_key", "api_key_file") if field in body]
+        secret_fields = [field for field in ("api_key", "api_key_file", "api_keys") if field in body]
         if secret_fields:
             return JSONResponse(
                 {
                     "ok": False,
-                    "error": f"{', '.join(secret_fields)} is no longer accepted in /settings. Save the API key in the Windows app settings and send it only in POST /start.",
+                    "error": f"{', '.join(secret_fields)} is no longer accepted in /settings. Save the API keys in the Windows app settings and send them only in POST /start.",
                 },
                 status_code=400,
             )

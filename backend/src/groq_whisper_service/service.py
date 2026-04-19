@@ -218,11 +218,11 @@ class RealtimeTranscriptionService:
                     "state": self._state.value,
                     "error": "Settings can only be changed when idle",
                 }
-            if "api_key" in overrides or "api_key_file" in overrides:
+            if "api_key" in overrides or "api_key_file" in overrides or "api_keys" in overrides:
                 return {
                     "ok": False,
                     "state": self._state.value,
-                    "error": "Secrets are not accepted in /settings. Save the API key in the Windows app settings and send it only in POST /start.",
+                    "error": "Secrets are not accepted in /settings. Save the API keys in the Windows app settings and send them only in POST /start.",
                 }
             allowed_fields = {
                 "model", "prompt", "language", "window_seconds",
@@ -243,25 +243,40 @@ class RealtimeTranscriptionService:
             self.config = candidate
             return {"ok": True, "state": self._state.value}
 
-    def _resolve_api_key(self, explicit_api_key: str | None = None) -> str:
-        if explicit_api_key is None:
-            raise ValueError("Missing API key. Save a key in Settings and try again.")
-        normalized = explicit_api_key.strip()
-        if not normalized:
-            raise ValueError("Missing API key. Save a key in Settings and try again.")
-        return normalized
+    def _resolve_api_keys(self, explicit_api_keys: list[str] | None = None) -> list[str]:
+        if explicit_api_keys is None:
+            raise ValueError("Missing API keys. Save at least one key in Settings and try again.")
 
-    def _preflight(self, explicit_api_key: str | None = None) -> dict[str, Any]:
+        normalized_keys: list[str] = []
+        seen: set[str] = set()
+
+        for api_key in explicit_api_keys:
+            if not isinstance(api_key, str):
+                raise ValueError("API keys must be strings.")
+            normalized = api_key.strip()
+            if not normalized:
+                continue
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            normalized_keys.append(normalized)
+
+        if not normalized_keys:
+            raise ValueError("Missing API keys. Save at least one key in Settings and try again.")
+
+        return normalized_keys
+
+    def _preflight(self, explicit_api_keys: list[str] | None = None) -> dict[str, Any]:
         results: dict[str, Any] = {
-            "api_key": False,
+            "api_keys": False,
             "ffmpeg": False,
             "errors": [],
         }
         try:
-            self._resolve_api_key(explicit_api_key)
-            results["api_key"] = True
+            self._resolve_api_keys(explicit_api_keys)
+            results["api_keys"] = True
         except Exception as exc:
-            results["errors"].append(f"API key: {exc}")
+            results["errors"].append(f"API keys: {exc}")
         try:
             proc = subprocess.run(
                 ["ffmpeg", "-version"],
@@ -277,7 +292,7 @@ class RealtimeTranscriptionService:
             results["errors"].append(f"ffmpeg check: {exc}")
         return results
 
-    def start(self, *, api_key: str | None = None) -> dict[str, Any]:
+    def start(self, *, api_keys: list[str] | None = None) -> dict[str, Any]:
         with self.state_lock:
             if self._state not in (ServiceState.idle, ServiceState.error):
                 return {
@@ -294,7 +309,7 @@ class RealtimeTranscriptionService:
             self._state = ServiceState.preflight
             self._capture_stopped.clear()
 
-        preflight = self._preflight(api_key)
+        preflight = self._preflight(api_keys)
         self._preflight_results = preflight
 
         if preflight["errors"]:
@@ -314,8 +329,8 @@ class RealtimeTranscriptionService:
             self.latest_patch_payload = None
             self.aggregator = self._build_aggregator()
             self.started_at_monotonic = self.clock()
-            resolved_api_key = self._resolve_api_key(api_key)
-            self.client = self.client_factory(resolved_api_key)
+            resolved_api_keys = self._resolve_api_keys(api_keys)
+            self.client = self.client_factory(resolved_api_keys[0])
             self.capture = self.capture_factory(self.config)
             self.capture.start()
         except Exception as exc:

@@ -102,6 +102,8 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 - [x] (2026-04-19T02:04:25-07:00) Stopped the Milestone 1 review loop after three rounds because no P0 issue remained and the user explicitly capped non-P0 review loops at three rounds.
 - [x] (2026-04-19T02:06:39-07:00) Implemented Milestone 2 in `ui/GroqWhisper.Core/TranscriptionStartRequest.cs`, `ui/GroqWhisper.Tests/TranscriptionStartRequestTests.cs`, `ui/GroqWhisper/Services/TranscriptionApiClient.cs`, and `ui/GroqWhisper/ViewModels/LiveViewModel.cs` by moving the frontend `/start` payload to `api_keys` and routing serialization through a Core DTO that tests can validate directly.
 - [x] (2026-04-19T02:06:39-07:00) Verified the Milestone 2 frontend contract with `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64` and `dotnet build ui/GroqWhisper.sln -p:Platform=x64`, both passing with zero warnings.
+- [x] (2026-04-19T02:15:54-07:00) Ran Milestone 2 review round 1 against the full diff from `7988db6` to `bd5a77eb43773685046e8480b05b6e1b4bff229c` and captured a critical contract mismatch where the frontend had moved to `api_keys` but the backend still only accepted `api_key`, plus a `/settings` secret-rejection gap for `api_keys`.
+- [x] (2026-04-19T02:15:54-07:00) Fixed the round-1 findings by updating `backend/src/groq_whisper_service/api.py` and `backend/src/groq_whisper_service/service.py` to accept `api_keys`, reject legacy `api_key` in `POST /start`, reject `api_keys` in `/settings`, and align backend messages to plural terminology. Added backend tests for the new contract and reran `C:\git\groq-whisper\.venv\Scripts\python.exe -m pytest backend\tests\test_service.py -q`, `dotnet test ui/GroqWhisper.Tests/GroqWhisper.Tests.csproj -p:Platform=x64`, and `dotnet build ui\GroqWhisper.sln -p:Platform=x64`.
 
 ## Surprises & Discoveries
 
@@ -143,6 +145,9 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 - Observation: the current .NET test project constraint was real in practice: the easiest way to get automated frontend contract coverage without referencing the WinUI assembly was to move the `/start` body shape into `GroqWhisper.Core` as a pure serializable DTO.
   Evidence: Milestone 2 added `TranscriptionStartRequest` under `ui/GroqWhisper.Core` and exercised it directly from `ui/GroqWhisper.Tests`, while the WinUI project continued to build unchanged from the test project’s perspective.
+
+- Observation: a frontend-only `api_keys` migration is not mergeable in this repository because the desktop app and backend service are shipped together; the backend `/start` parser and `/settings` secret filter must move in the same milestone to keep the branch runnable.
+  Evidence: Milestone 2 review round 1 found that the updated frontend immediately hit backend 400 responses until `api.py` and `service.py` were switched to the new request field.
 
 ## Decision Log
 
@@ -210,6 +215,10 @@ After this work, the Settings page will let the user manage multiple Groq API ke
   Rationale: This keeps the `api_keys` payload shape explicit, makes serialization testable from the existing test project, and reduces the chance of drifting back to the old `api_key` field by accident.
   Date/Author: 2026-04-19 / Codex
 
+- Decision: Milestone 2 includes the backend-side request-contract migration and `/settings` secret rejection for `api_keys`, even though runtime rotation itself remains a later milestone.
+  Rationale: The frontend and backend in this repository are versioned together, so the branch must remain runnable after the contract cut. Accepting `api_keys` end-to-end without yet rotating across them is the smallest coherent intermediate state.
+  Date/Author: 2026-04-19 / Codex
+
 - Decision: Frontend payload-shape automation will be added through a small pure request body helper or DTO in `ui/GroqWhisper.Core`, so `ui/GroqWhisper.Tests` can verify `api_keys` serialization without taking a dependency on the WinUI app assembly.
   Rationale: The existing test project already references `GroqWhisper.Core` but not `GroqWhisper`, so this is the lowest-friction path to automated frontend contract coverage.
   Date/Author: 2026-04-19 / Codex
@@ -228,7 +237,7 @@ After this work, the Settings page will let the user manage multiple Groq API ke
 
 ## Outcomes & Retrospective
 
-Milestone 1 is implemented and passes its automated verification. After the third and final allowed review round, the Windows-side multi-key storage flow now covers the main recovery cases called out during review: legacy raw-string payloads, malformed JSON envelopes, decrypt failures, file-read failures, empty-editor saves, and the “reveal a bad payload then immediately replace it” path all now degrade to actionable UI guidance instead of hidden or crashy failure modes. Milestone 2 is now also implemented and verified locally: the Windows frontend’s `/start` request is no longer built around a single `api_key` string, and the test suite now has direct regression coverage for `api_keys` JSON serialization through the new Core DTO. The remaining gaps are still the backend-side contract update and runtime rotation logic, plus manual walkthrough confirmation after the end-to-end path is complete.
+Milestone 1 is implemented and passes its automated verification. After the third and final allowed review round, the Windows-side multi-key storage flow now covers the main recovery cases called out during review: legacy raw-string payloads, malformed JSON envelopes, decrypt failures, file-read failures, empty-editor saves, and the “reveal a bad payload then immediately replace it” path all now degrade to actionable UI guidance instead of hidden or crashy failure modes. Milestone 2 is also implemented and verified locally after one review/fix round: both the Windows frontend and backend service now speak `api_keys`, the backend explicitly rejects legacy `api_key` start requests and all secret fields in `/settings`, and the branch remains runnable even though only the first normalized key is still used at runtime for now. The remaining gaps are the actual per-request round-robin/failover behavior from Milestone 3 plus manual walkthrough confirmation after the end-to-end path is complete.
 
 ## Context and Orientation
 
